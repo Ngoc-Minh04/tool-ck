@@ -1,0 +1,315 @@
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
+import httpx
+import os
+import json
+from app.config import settings
+from loguru import logger
+
+router = APIRouter()
+
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+
+
+def _get_key_and_provider(client_key: str = "") -> tuple[str, str]:
+    """Trả về (API_KEY, PROVIDER) dựa trên cấu trúc key."""
+    key = client_key.strip() if client_key else ""
+    
+    if key:
+        if key.startswith("AIzaSy"):
+            return key, "gemini"
+        elif key.startswith("sk-ant-"):
+            return key, "claude"
+        elif key.startswith("sk-"):
+            return key, "openai"
+        else:
+            return key, "claude"
+            
+    # Fallback to backend settings
+    if settings.ANTHROPIC_API_KEY and len(settings.ANTHROPIC_API_KEY) > 15 and not settings.ANTHROPIC_API_KEY.startswith("sk-ant-api03-"):
+        return settings.ANTHROPIC_API_KEY, "claude"
+    if settings.GEMINI_API_KEY and len(settings.GEMINI_API_KEY) > 15:
+        return settings.GEMINI_API_KEY, "gemini"
+    if settings.OPENAI_API_KEY and len(settings.OPENAI_API_KEY) > 15:
+        return settings.OPENAI_API_KEY, "openai"
+        
+    return settings.ANTHROPIC_API_KEY, "claude"
+
+
+def _get_claude_headers(key: str) -> dict:
+    return {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+    }
+
+
+async def _call_gemini(key: str, body: dict, stream: bool):
+    gemini_model = "gemini-2.5-flash"
+    body_model = body.get("model", "")
+    if "haiku" in body_model:
+        gemini_model = "gemini-2.5-flash"
+    elif "opus" in body_model or "sonnet" in body_model:
+        gemini_model = "gemini-3.5-flash"
+
+    gemini_body = {
+        "contents": []
+    }
+    if body.get("system"):
+        gemini_body["systemInstruction"] = {
+            "parts": [{"text": body.get("system")}]
+        }
+    
+    for msg in body.get("messages", []):
+        role = "user" if msg.get("role") == "user" else "model"
+        gemini_body["contents"].append({
+            "role": role,
+            "parts": [{"text": msg.get("content", "")}]
+        })
+
+    if stream:
+        async def event_stream():
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:streamGenerateContent?alt=sse&key={key}"
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", url, json=gemini_body) as r:
+                    buffer = ""
+                    async for chunk in r.aiter_text():
+                        buffer += chunk
+                        while "\n" in buffer:
+                            line, buffer = buffer.split("\n", 1)
+                            line = line.strip()
+                            if not line.startswith("data: "):
+                                continue
+                            data_str = line[6:].strip()
+                            try:
+                                data_json = json.loads(data_str)
+                                text_delta = data_json["candidates"][0]["content"]["parts"][0]["text"]
+                                yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': text_delta}})}\n\n".encode("utf-8")
+                            except Exception:
+                                pass
+            yield b"data: [DONE]\n\n"
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+    else:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={key}"
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(url, json=gemini_body)
+            res_json = r.json()
+            try:
+                text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                return {
+                    "content": [{"type": "text", "text": text}],
+                    "role": "assistant"
+                }
+            except Exception as e:
+                logger.error(f"Gemini error response: {res_json}")
+                return {"error": f"Gemini API Error: {str(e)}", "raw": res_json}
+
+
+async def _call_openai(key: str, body: dict, stream: bool):
+    openai_model = "gpt-4o-mini"
+    body_model = body.get("model", "")
+    if "haiku" in body_model:
+        openai_model = "gpt-4o-mini"
+    elif "opus" in body_model or "sonnet" in body_model:
+        openai_model = "gpt-4o"
+
+    openai_body = {
+        "model": openai_model,
+        "messages": [],
+        "stream": stream
+    }
+    
+    if body.get("system"):
+        openai_body["messages"].append({
+            "role": "system",
+            "content": body.get("system")
+        })
+    
+    for msg in body.get("messages", []):
+        openai_body["messages"].append({
+            "role": msg.get("role"),
+            "content": msg.get("content", "")
+        })
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {key}"
+    }
+    url = "https://api.openai.com/v1/chat/completions"
+
+    if stream:
+        async def event_stream():
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", url, headers=headers, json=openai_body) as r:
+                    buffer = ""
+                    async for chunk in r.aiter_text():
+                        buffer += chunk
+                        while "\n" in buffer:
+                            line, buffer = buffer.split("\n", 1)
+                            line = line.strip()
+                            if not line.startswith("data: "):
+                                continue
+                            data_str = line[6:].strip()
+                            if data_str == "[DONE]":
+                                continue
+                            try:
+                                data_json = json.loads(data_str)
+                                text_delta = data_json["choices"][0]["delta"].get("content", "")
+                                if text_delta:
+                                    yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': text_delta}})}\n\n".encode("utf-8")
+                            except Exception:
+                                pass
+            yield b"data: [DONE]\n\n"
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+    else:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(url, headers=headers, json=openai_body)
+            res_json = r.json()
+            try:
+                text = res_json["choices"][0]["message"]["content"]
+                return {
+                    "content": [{"type": "text", "text": text}],
+                    "role": "assistant"
+                }
+            except Exception as e:
+                logger.error(f"OpenAI error response: {res_json}")
+                return {"error": f"OpenAI API Error: {str(e)}", "raw": res_json}
+
+
+@router.post("/analyze")
+async def analyze(request: Request):
+    """Proxy endpoint cho AI analysis — tự động nhận diện và định tuyến tới Claude, Gemini hoặc ChatGPT."""
+    body = await request.json()
+    client_key = request.headers.get("x-api-key", "")
+    key, provider = _get_key_and_provider(client_key)
+    stream = body.get("stream", False)
+
+    if provider == "gemini":
+        return await _call_gemini(key, body, stream)
+    elif provider == "openai":
+        return await _call_openai(key, body, stream)
+    else:
+        headers = _get_claude_headers(key)
+        
+        # Map model name to valid Anthropic model identifier
+        body_model = body.get("model", "")
+        claude_model = "claude-3-5-sonnet-20241022"
+        if "haiku" in body_model:
+            claude_model = "claude-3-5-haiku-20241022"
+        elif "opus" in body_model:
+            claude_model = "claude-3-opus-20240229"
+        elif "sonnet" in body_model:
+            claude_model = "claude-3-5-sonnet-20241022"
+        body["model"] = claude_model
+
+        if stream:
+            async def event_stream():
+                async with httpx.AsyncClient(timeout=120) as client:
+                    async with client.stream("POST", ANTHROPIC_URL,
+                                             headers=headers, json=body) as r:
+                        async for chunk in r.aiter_bytes():
+                            yield chunk
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
+        else:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(ANTHROPIC_URL, headers=headers, json=body)
+                if r.status_code != 200:
+                    from fastapi.responses import JSONResponse
+                    try:
+                        err_json = r.json()
+                        return JSONResponse(status_code=r.status_code, content=err_json)
+                    except Exception:
+                        return JSONResponse(status_code=r.status_code, content={"error": {"message": r.text}})
+                return r.json()
+
+
+@router.post("/chat")
+async def chat(request: Request):
+    """Proxy endpoint cho AI chat — tự động định tuyến tới Claude, Gemini hoặc ChatGPT."""
+    body = await request.json()
+    client_key = request.headers.get("x-api-key", "")
+    key, provider = _get_key_and_provider(client_key)
+
+    if provider == "gemini":
+        return await _call_gemini(key, body, True)
+    elif provider == "openai":
+        return await _call_openai(key, body, True)
+    else:
+        headers = _get_claude_headers(key)
+        
+        # Map model name to valid Anthropic model identifier
+        body_model = body.get("model", "")
+        claude_model = "claude-3-5-sonnet-20241022"
+        if "haiku" in body_model:
+            claude_model = "claude-3-5-haiku-20241022"
+        elif "opus" in body_model:
+            claude_model = "claude-3-opus-20240229"
+        elif "sonnet" in body_model:
+            claude_model = "claude-3-5-sonnet-20241022"
+        body["model"] = claude_model
+
+        async def event_stream():
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", ANTHROPIC_URL,
+                                         headers=headers,
+                                         json={**body, "stream": True}) as r:
+                    async for chunk in r.aiter_bytes():
+                        yield chunk
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/test-key")
+async def test_key(request: Request):
+    """Kiểm tra tính hợp lệ của API Key đối với nhà cung cấp tương ứng (Claude, Gemini, ChatGPT)."""
+    try:
+        body = await request.json()
+        client_key = body.get("apiKey", "")
+        key, provider = _get_key_and_provider(client_key)
+        
+        if not key:
+            return {"ok": False, "error": "Chưa cung cấp API Key"}
+            
+        if provider == "gemini":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+            test_body = {"contents": [{"parts": [{"text": "Ping"}]}]}
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.post(url, json=test_body)
+                if r.status_code == 200:
+                    return {"ok": True}
+                else:
+                    return {"ok": False, "status_code": r.status_code, "detail": r.text}
+                    
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/chat/completions"
+            test_body = {
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": "Ping"}],
+                "max_tokens": 1
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {key}"
+            }
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.post(url, headers=headers, json=test_body)
+                if r.status_code == 200:
+                    return {"ok": True}
+                else:
+                    return {"ok": False, "status_code": r.status_code, "detail": r.text}
+                    
+        else:
+            headers = _get_claude_headers(key)
+            test_body = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "Ping"}]
+            }
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.post(ANTHROPIC_URL, headers=headers, json=test_body)
+                if r.status_code == 200:
+                    return {"ok": True}
+                else:
+                    return {"ok": False, "status_code": r.status_code, "detail": r.text}
+                    
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
