@@ -38,5 +38,5 @@ async def quick_quotes():
     if cached:
         return cached
     data = await run_in_threadpool(get_quick_quotes)
-    await cache_set("market:quick-quotes", data, ttl=30) # cache for 30 seconds
+    await cache_set("market:quick-quotes", data, ttl=15) # cache for 15 seconds
     return data

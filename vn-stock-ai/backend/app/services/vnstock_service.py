@@ -328,7 +328,7 @@ def get_quick_quotes() -> list:
     for i, ticker in enumerate(tickers):
         try:
             if i > 0:
-                time.sleep(1.2)
+                time.sleep(0.15)
                 
             stock = stock_client.stock(symbol=ticker, source="VCI")
             end = date.today().strftime("%Y-%m-%d")
