@@ -29,8 +29,8 @@ const MarketPage = () => {
 
   useEffect(() => {
     loadData();
-    // Auto refresh mỗi 15 giây
-    const interval = setInterval(loadData, 15000);
+    // Auto refresh mỗi 30 giây
+    const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, []);
 

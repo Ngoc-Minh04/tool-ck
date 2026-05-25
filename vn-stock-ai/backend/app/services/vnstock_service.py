@@ -297,7 +297,7 @@ def _mock_foreign_flow() -> list:
 def get_quick_quotes() -> list:
     import time
     
-    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB"]
+    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     
     fallbacks = {
         'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 85200.0, 'change': 400.0, 'pct': 0.47, 'vol': 2140, 'cap': '530.6T', 'ref': 84800.0, 'ceil': 90700.0, 'floor': 78900.0, 'high': 85500.0, 'low': 84500.0, 'open': 84800.0 },
@@ -308,6 +308,13 @@ def get_quick_quotes() -> list:
         'VIC': { 'ticker': 'VIC', 'exchange': 'HOSE', 'price': 38900.0, 'change': 200.0, 'pct': 0.52, 'vol': 1230, 'cap': '135T', 'ref': 38700.0, 'ceil': 41400.0, 'floor': 36000.0, 'high': 39100.0, 'low': 38600.0, 'open': 38700.0 },
         'VNM': { 'ticker': 'VNM', 'exchange': 'HOSE', 'price': 68500.0, 'change': -200.0, 'pct': -0.29, 'vol': 980, 'cap': '125T', 'ref': 68700.0, 'ceil': 73500.0, 'floor': 63900.0, 'high': 69000.0, 'low': 68300.0, 'open': 68700.0 },
         'ACB': { 'ticker': 'ACB', 'exchange': 'HOSE', 'price': 24800.0, 'change': 300.0, 'pct': 1.22, 'vol': 5670, 'cap': '95T', 'ref': 24500.0, 'ceil': 26200.0, 'floor': 22800.0, 'high': 24900.0, 'low': 24450.0, 'open': 24500.0 },
+        'MBB': { 'ticker': 'MBB', 'exchange': 'HOSE', 'price': 26500.0, 'change': 200.0, 'pct': 0.76, 'vol': 6120, 'cap': '115T', 'ref': 26300.0, 'ceil': 28100.0, 'floor': 24500.0, 'high': 26600.0, 'low': 26200.0, 'open': 26300.0 },
+        'TCB': { 'ticker': 'TCB', 'exchange': 'HOSE', 'price': 32100.0, 'change': -100.0, 'pct': -0.31, 'vol': 3450, 'cap': '175T', 'ref': 32200.0, 'ceil': 34450.0, 'floor': 30000.0, 'high': 32400.0, 'low': 32000.0, 'open': 32200.0 },
+        'SSI': { 'ticker': 'SSI', 'exchange': 'HOSE', 'price': 28500.0, 'change': -600.0, 'pct': -2.06, 'vol': 4300, 'cap': '43T', 'ref': 29100.0, 'ceil': 31100.0, 'floor': 27100.0, 'high': 29200.0, 'low': 28400.0, 'open': 29100.0 },
+        'MWG': { 'ticker': 'MWG', 'exchange': 'HOSE', 'price': 55000.0, 'change': 800.0, 'pct': 1.48, 'vol': 2200, 'cap': '80T', 'ref': 54200.0, 'ceil': 58000.0, 'floor': 50400.0, 'high': 55400.0, 'low': 54200.0, 'open': 54200.0 },
+        'GAS': { 'ticker': 'GAS', 'exchange': 'HOSE', 'price': 72000.0, 'change': 100.0, 'pct': 0.14, 'vol': 680, 'cap': '165T', 'ref': 71900.0, 'ceil': 76900.0, 'floor': 66900.0, 'high': 72300.0, 'low': 71800.0, 'open': 71900.0 },
+        'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.00, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
+        'VRE': { 'ticker': 'VRE', 'exchange': 'HOSE', 'price': 22500.0, 'change': 300.0, 'pct': 1.35, 'vol': 1950, 'cap': '51T', 'ref': 22200.0, 'ceil': 23750.0, 'floor': 20650.0, 'high': 22700.0, 'low': 22150.0, 'open': 22200.0 },
     }
     
     results = []
