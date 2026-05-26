@@ -331,22 +331,51 @@ def get_foreign_flow(df = None) -> list:
 
 def get_screener(exchange: str = "HOSE", min_pe: float = None, max_pe: float = None,
                 min_roe: float = None, signal: str = None) -> list:
-    """Screener co ban - tra ve danh sach co phieu loc"""
+    """Screener co ban - tra ve danh sach co phieu loc voi gia tri live va chi so tinh toan dong"""
     popular = [
-        {"ticker": "VCB", "close": 85200, "change_pct": 0.47, "pe": 12.5, "pb": 2.1, "roe": 18.2, "volume": 2140000, "exchange": "HOSE"},
-        {"ticker": "BID", "close": 42500, "change_pct": -0.70, "pe": 9.8, "pb": 1.5, "roe": 15.1, "volume": 3560000, "exchange": "HOSE"},
-        {"ticker": "CTG", "close": 28700, "change_pct": 0.35, "pe": 8.2, "pb": 1.2, "roe": 14.8, "volume": 4210000, "exchange": "HOSE"},
-        {"ticker": "FPT", "close": 132000, "change_pct": 1.15, "pe": 22.3, "pb": 5.8, "roe": 25.4, "volume": 1870000, "exchange": "HOSE"},
-        {"ticker": "HPG", "close": 24600, "change_pct": -1.99, "pe": 7.1, "pb": 1.1, "roe": 10.2, "volume": 8940000, "exchange": "HOSE"},
-        {"ticker": "ACB", "close": 24800, "change_pct": 1.22, "pe": 7.8, "pb": 1.6, "roe": 19.8, "volume": 5670000, "exchange": "HOSE"},
-        {"ticker": "MBB", "close": 26500, "change_pct": 0.75, "pe": 6.9, "pb": 1.3, "roe": 21.5, "volume": 6120000, "exchange": "HOSE"},
-        {"ticker": "TCB", "close": 32100, "change_pct": -0.30, "pe": 8.5, "pb": 1.8, "roe": 17.3, "volume": 3450000, "exchange": "HOSE"},
-        {"ticker": "VNM", "close": 68500, "change_pct": -0.29, "pe": 18.7, "pb": 4.2, "roe": 22.1, "volume": 980000, "exchange": "HOSE"},
-        {"ticker": "VIC", "close": 38900, "change_pct": 0.52, "pe": 35.2, "pb": 2.9, "roe": 8.5, "volume": 1230000, "exchange": "HOSE"},
-        {"ticker": "GAS", "close": 72000, "change_pct": 0.14, "pe": 14.2, "pb": 2.8, "roe": 20.3, "volume": 680000, "exchange": "HOSE"},
-        {"ticker": "SSI", "close": 28500, "change_pct": -2.05, "pe": 12.1, "pb": 1.9, "roe": 15.6, "volume": 4300000, "exchange": "HOSE"},
+        {"ticker": "VCB", "close": 64400, "change_pct": 1.10, "pe": 16.8, "pb": 4.1, "roe": 25.5, "volume": 2140000, "exchange": "HOSE"},
+        {"ticker": "BID", "close": 43600, "change_pct": 1.40, "pe": 16.2, "pb": 2.3, "roe": 14.2, "volume": 3560000, "exchange": "HOSE"},
+        {"ticker": "CTG", "close": 35250, "change_pct": 1.29, "pe": 14.6, "pb": 1.2, "roe": 8.3, "volume": 4210000, "exchange": "HOSE"},
+        {"ticker": "FPT", "close": 74500, "change_pct": 1.36, "pe": 11.6, "pb": 2.4, "roe": 18.7, "volume": 1870000, "exchange": "HOSE"},
+        {"ticker": "HPG", "close": 24250, "change_pct": 0.62, "pe": 8.2, "pb": 1.7, "roe": 23.5, "volume": 8940000, "exchange": "HOSE"},
+        {"ticker": "ACB", "close": 24800, "change_pct": 5.31, "pe": 7.5, "pb": 1.8, "roe": 27.7, "volume": 5670000, "exchange": "HOSE"},
+        {"ticker": "MBB", "close": 25500, "change_pct": 2.82, "pe": 7.6, "pb": 1.4, "roe": 19.2, "volume": 6120000, "exchange": "HOSE"},
+        {"ticker": "TCB", "close": 32900, "change_pct": 1.08, "pe": 20.5, "pb": 3.3, "roe": 21.5, "volume": 3450000, "exchange": "HOSE"},
+        {"ticker": "VNM", "close": 59100, "change_pct": 0.00, "pe": 22.1, "pb": 8.8, "roe": 40.8, "volume": 980000, "exchange": "HOSE"},
+        {"ticker": "VIC", "close": 213000, "change_pct": -2.65, "pe": 98.6, "pb": 6.8, "roe": 5.0, "volume": 1230000, "exchange": "HOSE"},
+        {"ticker": "GAS", "close": 82500, "change_pct": 0.61, "pe": 17.7, "pb": 4.5, "roe": 25.4, "volume": 680000, "exchange": "HOSE"},
+        {"ticker": "SSI", "close": 28000, "change_pct": 2.00, "pe": 10.1, "pb": 1.5, "roe": 14.7, "volume": 4300000, "exchange": "HOSE"},
     ]
-    result = popular
+    
+    tickers = [s["ticker"] for s in popular]
+    try:
+        quotes = get_quick_quotes(tickers)
+        quotes_map = {q["ticker"]: q for q in quotes if q.get("is_live")}
+    except Exception as e:
+        logger.warning(f"Failed to fetch quick quotes for screener: {e}")
+        quotes_map = {}
+        
+    result = []
+    for s in popular:
+        ticker = s["ticker"]
+        item = s.copy()
+        if ticker in quotes_map:
+            q = quotes_map[ticker]
+            live_price = q["price"]
+            if live_price > 0:
+                old_close = s["close"]
+                ratio = live_price / old_close if old_close else 1.0
+                
+                item["close"] = live_price
+                item["change_pct"] = q["pct"]
+                item["volume"] = q["vol"] * 1000
+                if s["pe"] is not None:
+                    item["pe"] = round(s["pe"] * ratio, 1)
+                if s["pb"] is not None:
+                    item["pb"] = round(s["pb"] * ratio, 1)
+                item["is_live"] = True
+        result.append(item)
+
     if min_pe is not None:
         result = [s for s in result if s["pe"] is not None and s["pe"] >= min_pe]
     if max_pe is not None:
@@ -453,19 +482,19 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     tickers = ticker_list if ticker_list is not None else default_tickers
     
     fallbacks = {
-        'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 85200.0, 'change': 400.0, 'pct': 0.47, 'vol': 2140, 'cap': '530.6T', 'ref': 84800.0, 'ceil': 90700.0, 'floor': 78900.0, 'high': 85500.0, 'low': 84500.0, 'open': 84800.0 },
-        'BID': { 'ticker': 'BID', 'exchange': 'HOSE', 'price': 42500.0, 'change': -300.0, 'pct': -0.70, 'vol': 3560, 'cap': '245T', 'ref': 42800.0, 'ceil': 45750.0, 'floor': 39850.0, 'high': 43000.0, 'low': 42400.0, 'open': 42800.0 },
-        'CTG': { 'ticker': 'CTG', 'exchange': 'HOSE', 'price': 28700.0, 'change': 100.0, 'pct': 0.35, 'vol': 4210, 'cap': '185T', 'ref': 28600.0, 'ceil': 30600.0, 'floor': 26600.0, 'high': 28900.0, 'low': 28500.0, 'open': 28600.0 },
-        'FPT': { 'ticker': 'FPT', 'exchange': 'HOSE', 'price': 132000.0, 'change': 1500.0, 'pct': 1.15, 'vol': 1870, 'cap': '145T', 'ref': 130500.0, 'ceil': 139600.0, 'floor': 121400.0, 'high': 132500.0, 'low': 130000.0, 'open': 130500.0 },
-        'HPG': { 'ticker': 'HPG', 'exchange': 'HOSE', 'price': 24600.0, 'change': -500.0, 'pct': -1.99, 'vol': 8940, 'cap': '140T', 'ref': 25100.0, 'ceil': 26850.0, 'floor': 23350.0, 'high': 25200.0, 'low': 24500.0, 'open': 25100.0 },
-        'VIC': { 'ticker': 'VIC', 'exchange': 'HOSE', 'price': 38900.0, 'change': 200.0, 'pct': 0.52, 'vol': 1230, 'cap': '135T', 'ref': 38700.0, 'ceil': 41400.0, 'floor': 36000.0, 'high': 39100.0, 'low': 38600.0, 'open': 38700.0 },
-        'VNM': { 'ticker': 'VNM', 'exchange': 'HOSE', 'price': 68500.0, 'change': -200.0, 'pct': -0.29, 'vol': 980, 'cap': '125T', 'ref': 68700.0, 'ceil': 73500.0, 'floor': 63900.0, 'high': 69000.0, 'low': 68300.0, 'open': 68700.0 },
-        'ACB': { 'ticker': 'ACB', 'exchange': 'HOSE', 'price': 24800.0, 'change': 300.0, 'pct': 1.22, 'vol': 5670, 'cap': '95T', 'ref': 24500.0, 'ceil': 26200.0, 'floor': 22800.0, 'high': 24900.0, 'low': 24450.0, 'open': 24500.0 },
-        'MBB': { 'ticker': 'MBB', 'exchange': 'HOSE', 'price': 26500.0, 'change': 200.0, 'pct': 0.76, 'vol': 6120, 'cap': '115T', 'ref': 26300.0, 'ceil': 28100.0, 'floor': 24500.0, 'high': 26600.0, 'low': 26200.0, 'open': 26300.0 },
-        'TCB': { 'ticker': 'TCB', 'exchange': 'HOSE', 'price': 32100.0, 'change': -100.0, 'pct': -0.31, 'vol': 3450, 'cap': '175T', 'ref': 32200.0, 'ceil': 34450.0, 'floor': 30000.0, 'high': 32400.0, 'low': 32000.0, 'open': 32200.0 },
-        'SSI': { 'ticker': 'SSI', 'exchange': 'HOSE', 'price': 28500.0, 'change': -600.0, 'pct': -2.06, 'vol': 4300, 'cap': '43T', 'ref': 29100.0, 'ceil': 31100.0, 'floor': 27100.0, 'high': 29200.0, 'low': 28400.0, 'open': 29100.0 },
+        'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 64400.0, 'change': 700.0, 'pct': 1.1, 'vol': 2140, 'cap': '355T', 'ref': 63700.0, 'ceil': 68100.0, 'floor': 59300.0, 'high': 64500.0, 'low': 63700.0, 'open': 63700.0 },
+        'BID': { 'ticker': 'BID', 'exchange': 'HOSE', 'price': 43600.0, 'change': 600.0, 'pct': 1.4, 'vol': 3560, 'cap': '250T', 'ref': 43000.0, 'ceil': 46000.0, 'floor': 40000.0, 'high': 43700.0, 'low': 43000.0, 'open': 43000.0 },
+        'CTG': { 'ticker': 'CTG', 'exchange': 'HOSE', 'price': 35250.0, 'change': 450.0, 'pct': 1.29, 'vol': 4210, 'cap': '170T', 'ref': 34800.0, 'ceil': 37200.0, 'floor': 32400.0, 'high': 35300.0, 'low': 34800.0, 'open': 34800.0 },
+        'FPT': { 'ticker': 'FPT', 'exchange': 'HOSE', 'price': 74500.0, 'change': 1000.0, 'pct': 1.36, 'vol': 1870, 'cap': '98T', 'ref': 73500.0, 'ceil': 78600.0, 'floor': 68400.0, 'high': 74600.0, 'low': 73500.0, 'open': 73500.0 },
+        'HPG': { 'ticker': 'HPG', 'exchange': 'HOSE', 'price': 24250.0, 'change': 150.0, 'pct': 0.62, 'vol': 8940, 'cap': '138T', 'ref': 24100.0, 'ceil': 25750.0, 'floor': 22450.0, 'high': 24300.0, 'low': 24100.0, 'open': 24100.0 },
+        'VIC': { 'ticker': 'VIC', 'exchange': 'HOSE', 'price': 213000.0, 'change': -5800.0, 'pct': -2.65, 'vol': 1230, 'cap': '82T', 'ref': 218800.0, 'ceil': 234100.0, 'floor': 203500.0, 'high': 218800.0, 'low': 212000.0, 'open': 218800.0 },
+        'VNM': { 'ticker': 'VNM', 'exchange': 'HOSE', 'price': 59100.0, 'change': 0.0, 'pct': 0.0, 'vol': 980, 'cap': '123T', 'ref': 59100.0, 'ceil': 63200.0, 'floor': 55000.0, 'high': 59200.0, 'low': 58900.0, 'open': 59100.0 },
+        'ACB': { 'ticker': 'ACB', 'exchange': 'HOSE', 'price': 24800.0, 'change': 1250.0, 'pct': 5.31, 'vol': 5670, 'cap': '96T', 'ref': 23550.0, 'ceil': 25150.0, 'floor': 21950.0, 'high': 24900.0, 'low': 23550.0, 'open': 23550.0 },
+        'MBB': { 'ticker': 'MBB', 'exchange': 'HOSE', 'price': 25500.0, 'change': 700.0, 'pct': 2.82, 'vol': 6120, 'cap': '110T', 'ref': 24800.0, 'ceil': 26500.0, 'floor': 23100.0, 'high': 25600.0, 'low': 24800.0, 'open': 24800.0 },
+        'TCB': { 'ticker': 'TCB', 'exchange': 'HOSE', 'price': 32900.0, 'change': 350.0, 'pct': 1.08, 'vol': 3450, 'cap': '115T', 'ref': 32550.0, 'ceil': 34800.0, 'floor': 30300.0, 'high': 33000.0, 'low': 32550.0, 'open': 32550.0 },
+        'SSI': { 'ticker': 'SSI', 'exchange': 'HOSE', 'price': 28000.0, 'change': 550.0, 'pct': 2.0, 'vol': 4300, 'cap': '42T', 'ref': 27450.0, 'ceil': 29350.0, 'floor': 25550.0, 'high': 28100.0, 'low': 27450.0, 'open': 27450.0 },
         'MWG': { 'ticker': 'MWG', 'exchange': 'HOSE', 'price': 55000.0, 'change': 800.0, 'pct': 1.48, 'vol': 2200, 'cap': '80T', 'ref': 54200.0, 'ceil': 58000.0, 'floor': 50400.0, 'high': 55400.0, 'low': 54200.0, 'open': 54200.0 },
-        'GAS': { 'ticker': 'GAS', 'exchange': 'HOSE', 'price': 72000.0, 'change': 100.0, 'pct': 0.14, 'vol': 680, 'cap': '165T', 'ref': 71900.0, 'ceil': 76900.0, 'floor': 66900.0, 'high': 72300.0, 'low': 71800.0, 'open': 71900.0 },
+        'GAS': { 'ticker': 'GAS', 'exchange': 'HOSE', 'price': 82500.0, 'change': 500.0, 'pct': 0.61, 'vol': 680, 'cap': '158T', 'ref': 82000.0, 'ceil': 87700.0, 'floor': 76300.0, 'high': 82700.0, 'low': 82000.0, 'open': 82000.0 },
         'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.00, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
         'VRE': { 'ticker': 'VRE', 'exchange': 'HOSE', 'price': 22500.0, 'change': 300.0, 'pct': 1.35, 'vol': 1950, 'cap': '51T', 'ref': 22200.0, 'ceil': 23750.0, 'floor': 20650.0, 'high': 22700.0, 'low': 22150.0, 'open': 22200.0 },
     }
