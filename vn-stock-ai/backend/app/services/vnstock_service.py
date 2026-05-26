@@ -293,6 +293,8 @@ def _mock_foreign_flow() -> list:
     ]
 
 
+_last_live_quotes = {}
+
 def get_quick_quotes(ticker_list: list = None) -> list:
     from concurrent.futures import ThreadPoolExecutor
     import pandas as pd
@@ -359,7 +361,7 @@ def get_quick_quotes(ticker_list: list = None) -> list:
                 change = price - ref_price
                 pct = (change / ref_price) * 100 if ref_price else 0
                 
-                return {
+                res = {
                     "ticker": ticker,
                     "exchange": "HOSE",
                     "price": round(price),
@@ -372,11 +374,18 @@ def get_quick_quotes(ticker_list: list = None) -> list:
                     "floor": round(floor_price),
                     "high": round(high_price),
                     "low": round(low_price),
-                    "open": round(open_price)
+                    "open": round(open_price),
+                    "is_live": True
                 }
+                _last_live_quotes[ticker] = res
+                return res
         except BaseException as e:
             logger.warning(f"Failed to fetch live quote for {ticker}: {e}")
-        return fallbacks.get(ticker, {
+            
+        if ticker in _last_live_quotes:
+            return _last_live_quotes[ticker]
+            
+        fb = fallbacks.get(ticker, {
             "ticker": ticker,
             "exchange": "HOSE",
             "price": 0.0,
@@ -391,6 +400,9 @@ def get_quick_quotes(ticker_list: list = None) -> list:
             "low": 0.0,
             "open": 0.0
         })
+        fb_copy = fb.copy()
+        fb_copy["is_live"] = False
+        return fb_copy
 
     # Sử dụng 8 workers để tối ưu hóa tải song song bảng giá thực tế từ sàn
     with ThreadPoolExecutor(max_workers=8) as executor:

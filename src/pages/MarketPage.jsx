@@ -149,12 +149,20 @@ const MarketPage = () => {
       if (!prev.length) return rawQuotes;
 
       const newFlashes = {};
-      rawQuotes.forEach(rawRow => {
+      const nextQuotes = rawQuotes.map(rawRow => {
         const prevRow = prev.find(p => p.ticker === rawRow.ticker);
-        // Nhấp nháy chỉ khi giá thật sự thay đổi từ sàn
-        if (prevRow && prevRow.price !== rawRow.price) {
+        
+        // Nếu dòng cũ trong State đã có giá thật (is_live === true) nhưng dòng mới lại là mock (is_live === false)
+        // thì giữ lại dòng cũ để không bị ghi đè thành dữ liệu mock
+        if (prevRow && prevRow.is_live && !rawRow.is_live) {
+          return prevRow;
+        }
+
+        // Nhấp nháy chỉ khi giá thật sự thay đổi từ sàn và là giá thật
+        if (prevRow && prevRow.price !== rawRow.price && rawRow.is_live) {
           newFlashes[rawRow.ticker] = rawRow.price > prevRow.price ? 'up' : 'down';
         }
+        return rawRow;
       });
 
       if (Object.keys(newFlashes).length > 0) {
@@ -170,7 +178,7 @@ const MarketPage = () => {
         }, 1000);
       }
 
-      return rawQuotes;
+      return nextQuotes;
     });
   }, [rawQuotes]);
 
@@ -200,7 +208,13 @@ const MarketPage = () => {
           const nextQuotes = prev.map(row => {
             const liveRow = liveData.find(l => l.ticker === row.ticker);
             if (liveRow) {
-              if (row.price !== liveRow.price) {
+              // Nếu dòng cũ đã là giá thật (is_live === true) nhưng dòng mới là mock (is_live === false)
+              // thì giữ nguyên dòng cũ
+              if (row.is_live && !liveRow.is_live) {
+                return row;
+              }
+
+              if (row.price !== liveRow.price && liveRow.is_live) {
                 newFlashes[row.ticker] = liveRow.price > row.price ? 'up' : 'down';
               }
               return {
