@@ -26,16 +26,22 @@ sys.path.append("app")
 from vnstock.api.trading import Trading
 
 ticker = "FPT"
-print(f"--- Fetching price board for {ticker} ---")
+print(f"--- Testing Series.get for {ticker} ---")
 try:
     t = Trading(symbol=ticker, source="VCI", show_log=False)
     df = t.price_board(symbols_list=[ticker])
-    print("Columns in df:")
-    print(df.columns.tolist())
     if not df.empty:
         row = df.iloc[0]
-        print("Row keys and values:")
-        for col in df.columns:
-            print(f"  {col}: {row[col]}")
+        
+        buy_val = row.get(('match', 'foreign_buy_value'))
+        sell_val = row.get(('match', 'foreign_sell_value'))
+        print("Using row.get(('match', 'foreign_buy_value')):", buy_val)
+        print("Using row.get(('match', 'foreign_sell_value')):", sell_val)
+        
+        # Thử lấy bằng direct access
+        buy_val_direct = row[('match', 'foreign_buy_value')]
+        sell_val_direct = row[('match', 'foreign_sell_value')]
+        print("Using row[('match', 'foreign_buy_value')]:", buy_val_direct)
+        print("Using row[('match', 'foreign_sell_value')]:", sell_val_direct)
 except Exception as e:
-    print("Failed to get price board:", e)
+    print("Error:", e)

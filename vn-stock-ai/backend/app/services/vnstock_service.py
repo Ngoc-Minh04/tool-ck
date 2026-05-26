@@ -243,8 +243,39 @@ def get_stock_foreign_net(ticker: str) -> float:
 
 
 def get_top_movers() -> dict:
-    # Trực tiếp sử dụng mock data để tăng tốc độ
-    return _mock_movers()
+    """Lay danh sach top movers (tang, giam, volume) voi gia tri live tu vnstock"""
+    mock_res = _mock_movers()
+    gainers = mock_res["top_gain"]
+    losers = mock_res["top_loss"]
+    volumes = mock_res["top_volume"]
+    
+    all_tickers = list(set([item["ticker"] for item in gainers + losers + volumes]))
+    try:
+        quotes = get_quick_quotes(all_tickers)
+        quotes_map = {q["ticker"]: q for q in quotes if q.get("is_live")}
+    except Exception as e:
+        logger.warning(f"Failed to fetch quick quotes for top movers: {e}")
+        quotes_map = {}
+        
+    def update_list(lst):
+        res = []
+        for item in lst:
+            it = item.copy()
+            ticker = it["ticker"]
+            if ticker in quotes_map:
+                q = quotes_map[ticker]
+                it["close"] = q["price"]
+                it["change_pct"] = q["pct"]
+                it["volume"] = q["vol"] * 1000
+            res.append(it)
+        return res
+        
+    return {
+        "top_gain": update_list(gainers),
+        "top_loss": update_list(losers),
+        "top_volume": update_list(volumes)
+    }
+
 
 
 def get_foreign_flow(df = None) -> list:
