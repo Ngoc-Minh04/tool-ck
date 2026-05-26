@@ -6,10 +6,12 @@ import { Search, Zap, RefreshCw } from 'lucide-react';
 import { Button, Select, Tabs } from '../UI';
 import useAppStore from '../../store/appStore';
 import { EXCHANGES, TIMEFRAMES, POPULAR_TICKERS } from '../../constants/sources';
+import { History } from 'lucide-react';
 
 const TickerForm = ({ onAnalyze, loading }) => {
   const settings = useAppStore((s) => s.settings);
   const toggleSource = useAppStore((s) => s.toggleSource);
+  const history = useAppStore((s) => s.history);
 
   const [ticker, setTicker] = useState('');
   const [exchange, setExchange] = useState(settings.defaultExchange);
@@ -137,6 +139,64 @@ const TickerForm = ({ onAnalyze, loading }) => {
       >
         {loading ? 'Đang phân tích...' : `🔍 Phân tích ${debouncedTicker || ticker || 'mã CK'}`}
       </Button>
+
+      {/* Quick history */}
+      {history.length > 0 && (
+        <div>
+          <div className="text-xs text-slate-500 mb-2 flex items-center gap-1">
+            <History size={11} />
+            Phân tích gần đây
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {history.slice(0, 3).map((h) => (
+              <button
+                key={h.id}
+                onClick={() => {
+                  setTicker(h.ticker);
+                  setDebouncedTicker(h.ticker);
+                  if (h.exchange) setExchange(h.exchange);
+                  if (h.timeframe) setTimeframe(h.timeframe);
+                }}
+                className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-xs transition-all text-left"
+                style={{
+                  background: 'rgba(26,47,69,0.7)',
+                  border: '1px solid rgba(79,195,247,0.08)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(79,195,247,0.25)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(79,195,247,0.08)'}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="font-bold"
+                    style={{
+                      color: h.signal === 'BUY' ? '#4ade80' : h.signal === 'SELL' ? '#f87171' : '#facc15',
+                    }}
+                  >
+                    {h.ticker}
+                  </span>
+                  <span className="text-slate-500">{h.exchange}</span>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-500">{h.timeframe}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {h.signal && (
+                    <span
+                      className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                      style={{
+                        background: h.signal === 'BUY' ? 'rgba(74,222,128,0.15)' : h.signal === 'SELL' ? 'rgba(248,113,113,0.15)' : 'rgba(250,204,21,0.15)',
+                        color: h.signal === 'BUY' ? '#4ade80' : h.signal === 'SELL' ? '#f87171' : '#facc15',
+                      }}
+                    >
+                      {h.signal}
+                    </span>
+                  )}
+                  <span className="text-slate-600">↩</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
