@@ -293,11 +293,12 @@ def _mock_foreign_flow() -> list:
     ]
 
 
-def get_quick_quotes() -> list:
+def get_quick_quotes(ticker_list: list = None) -> list:
     from concurrent.futures import ThreadPoolExecutor
     import pandas as pd
     
-    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
+    default_tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
+    tickers = ticker_list if ticker_list is not None else default_tickers
     
     fallbacks = {
         'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 85200.0, 'change': 400.0, 'pct': 0.47, 'vol': 2140, 'cap': '530.6T', 'ref': 84800.0, 'ceil': 90700.0, 'floor': 78900.0, 'high': 85500.0, 'low': 84500.0, 'open': 84800.0 },
@@ -365,7 +366,7 @@ def get_quick_quotes() -> list:
                     "change": round(change),
                     "pct": round(pct, 2),
                     "vol": volume // 1000 if volume >= 1000 else volume,
-                    "cap": fallbacks[ticker]["cap"],
+                    "cap": fallbacks.get(ticker, {}).get("cap", "N/A"),
                     "ref": round(ref_price),
                     "ceil": round(ceil_price),
                     "floor": round(floor_price),
@@ -375,7 +376,21 @@ def get_quick_quotes() -> list:
                 }
         except BaseException as e:
             logger.warning(f"Failed to fetch live quote for {ticker}: {e}")
-        return fallbacks[ticker]
+        return fallbacks.get(ticker, {
+            "ticker": ticker,
+            "exchange": "HOSE",
+            "price": 0.0,
+            "change": 0.0,
+            "pct": 0.0,
+            "vol": 0,
+            "cap": "N/A",
+            "ref": 0.0,
+            "ceil": 0.0,
+            "floor": 0.0,
+            "high": 0.0,
+            "low": 0.0,
+            "open": 0.0
+        })
 
     # Sử dụng 8 workers để tối ưu hóa tải song song bảng giá thực tế từ sàn
     with ThreadPoolExecutor(max_workers=8) as executor:

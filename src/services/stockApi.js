@@ -78,8 +78,9 @@ export const stockApi = {
     return res.data?.data || res.data;
   },
 
-  async getQuickQuotes() {
-    const res = await api.get('/market/quick-quotes');
+  async getQuickQuotes(tickers) {
+    const params = tickers ? { tickers } : {};
+    const res = await api.get('/market/quick-quotes', { params });
     return res.data?.data || res.data || [];
   },
 

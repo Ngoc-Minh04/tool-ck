@@ -115,7 +115,19 @@ const useVnStock = () => {
     }
   }, []);
 
-  return { loading, error, fetchOHLCV, fetchInfo, fetchMarket };
+  /**
+   * Lấy nhanh giá của danh sách mã cụ thể (real-time)
+   */
+  const fetchQuickQuotes = useCallback(async (tickers) => {
+    try {
+      return await stockApi.getQuickQuotes(tickers);
+    } catch (err) {
+      console.error("fetchQuickQuotes failed:", err);
+      return [];
+    }
+  }, []);
+
+  return { loading, error, fetchOHLCV, fetchInfo, fetchMarket, fetchQuickQuotes };
 };
 
 export default useVnStock;

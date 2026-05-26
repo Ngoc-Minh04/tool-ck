@@ -92,7 +92,7 @@ const MarketPage = () => {
   const [pinnedTickers, setPinnedTickers] = useState(loadPinned);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState('Tất cả');
-  const { loading, fetchMarket } = useVnStock();
+  const { loading, fetchMarket, fetchQuickQuotes } = useVnStock();
 
   // ===== FALLBACK DATA =====
   const fallbackQuotes = [
@@ -173,6 +173,64 @@ const MarketPage = () => {
       return rawQuotes;
     });
   }, [rawQuotes]);
+
+  // Lấy dữ liệu thực từ sàn cho FPT và MBB mỗi 3 giây
+  useEffect(() => {
+    const checkMarket = () => {
+      const now = new Date();
+      const day = now.getDay(); // 0=CN, 1=T2...6=T7
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const timeInMinutes = hours * 60 + minutes;
+      // GTM+7: 9:00 = 540, 15:15 = 915
+      return day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 915;
+    };
+
+    const timer = setInterval(async () => {
+      if (!checkMarket()) return;
+
+      try {
+        const liveData = await fetchQuickQuotes('FPT,MBB');
+        if (!liveData || !liveData.length) return;
+
+        setQuotesState(prev => {
+          if (!prev.length) return prev;
+          
+          const newFlashes = {};
+          const nextQuotes = prev.map(row => {
+            const liveRow = liveData.find(l => l.ticker === row.ticker);
+            if (liveRow) {
+              if (row.price !== liveRow.price) {
+                newFlashes[row.ticker] = liveRow.price > row.price ? 'up' : 'down';
+              }
+              return {
+                ...row,
+                ...liveRow,
+              };
+            }
+            return row;
+          });
+
+          if (Object.keys(newFlashes).length > 0) {
+            setFlashStates(prevFlashes => ({ ...prevFlashes, ...newFlashes }));
+            setTimeout(() => {
+              setFlashStates(prevFlashes => {
+                const next = { ...prevFlashes };
+                Object.keys(newFlashes).forEach(t => delete next[t]);
+                return next;
+              });
+            }, 1000);
+          }
+
+          return nextQuotes;
+        });
+      } catch (err) {
+        console.error("Failed to fetch live quotes for FPT/MBB:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [fetchQuickQuotes]);
 
   // 1. Lọc theo tìm kiếm + ngành trực tiếp từ quotesState
   let filtered = quotesState.filter(row => {

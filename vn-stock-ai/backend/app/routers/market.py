@@ -33,7 +33,12 @@ async def foreign():
     return data
 
 @router.get("/quick-quotes")
-async def quick_quotes():
+async def quick_quotes(tickers: str = None):
+    if tickers:
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        data = await run_in_threadpool(get_quick_quotes, ticker_list)
+        return data
+        
     cached = await cache_get("market:quick-quotes")
     if cached:
         return cached
