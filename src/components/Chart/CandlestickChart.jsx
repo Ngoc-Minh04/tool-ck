@@ -132,6 +132,54 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
   // Lấy 60 nến gần nhất để hiển thị
   const displayData = chartData.slice(-60);
 
+  // Tính toán miền giá trị Y-axis chính xác để tránh bị nén/chồng chéo do lỗi tự động scale của Recharts Bar
+  const yDomain = useMemo(() => {
+    if (!displayData.length) return ['auto', 'auto'];
+
+    let min = Infinity;
+    let max = -Infinity;
+
+    displayData.forEach((d) => {
+      // Chỉ lấy các giá trị số hợp lệ
+      const vals = [d.low, d.high, d.open, d.close];
+      if (showMA) {
+        vals.push(d.ma20, d.ma50, d.ma200);
+      }
+      if (showBB) {
+        vals.push(d.bb_lower, d.bb_upper);
+      }
+
+      vals.forEach((val) => {
+        if (val !== null && val !== undefined && typeof val === 'number' && isFinite(val)) {
+          if (val < min) min = val;
+          if (val > max) max = val;
+        }
+      });
+    });
+
+    if (sr) {
+      const allSr = [
+        ...(sr.supports || []),
+        ...(sr.resistances || []),
+        sr.pivot_points?.pivot,
+      ].filter((val) => val !== null && val !== undefined && typeof val === 'number' && isFinite(val));
+
+      allSr.forEach((val) => {
+        const currentRange = max - min;
+        const pad = currentRange * 0.15 || 2000;
+        if (val >= min - pad && val <= max + pad) {
+          if (val < min) min = val;
+          if (val > max) max = val;
+        }
+      });
+    }
+
+    if (min === Infinity || max === -Infinity) return ['auto', 'auto'];
+
+    const padding = (max - min) * 0.05 || 1000;
+    return [Math.floor(min - padding), Math.ceil(max + padding)];
+  }, [displayData, showMA, showBB, sr]);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={displayData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -153,47 +201,70 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
           axisLine={false}
           orientation="right"
           tickFormatter={(v) => (v / 1000).toFixed(0) + 'K'}
-          domain={['auto', 'auto']}
+          domain={yDomain}
         />
         <Tooltip content={<CustomTooltip />} />
 
         {/* Bollinger Bands */}
         {showBB && (
           <>
-            <Line type="monotone" dataKey="bbUpper" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
-            <Line type="monotone" dataKey="bbMid" stroke="rgba(79,195,247,0.5)" dot={false} strokeWidth={1} />
-            <Line type="monotone" dataKey="bbLower" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
+            <Line type="monotone" dataKey="bb_upper" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
+            <Line type="monotone" dataKey="bb_mid" stroke="rgba(79,195,247,0.5)" dot={false} strokeWidth={1} />
+            <Line type="monotone" dataKey="bb_lower" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
           </>
         )}
 
         {/* Bấc nến (High-Low) */}
-        <Bar dataKey="wickHeight" stackId="wick" baseValue="wickBase" fill="transparent"
+        <Bar
+          dataKey="high"
+          fill="transparent"
           shape={(props) => {
-            const { x, y, width, height, payload } = props;
-            if (!payload) return null;
-            const color = payload.isUp ? '#00e676' : '#ff5252';
-            return <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height} stroke={color} strokeWidth={1} />;
+            const { x, width, payload, yAxis } = props;
+            if (!payload || !yAxis?.scale) return null;
+            const { high, low, isUp } = payload;
+            if (high === undefined || low === undefined) return null;
+            const yHigh = yAxis.scale(high);
+            const yLow = yAxis.scale(low);
+            const color = isUp ? '#00e676' : '#ff5252';
+            return (
+              <line
+                x1={x + width / 2}
+                y1={yHigh}
+                x2={x + width / 2}
+                y2={yLow}
+                stroke={color}
+                strokeWidth={1.5}
+              />
+            );
           }}
         />
 
-        {/* Thân nến */}
+        {/* Thân nến (Open-Close) */}
         <Bar
-          dataKey="candleHeight"
-          stackId="body"
-          baseValue="candleBase"
-          maxBarSize={12}
+          dataKey="close"
+          fill="transparent"
           shape={(props) => {
-            const { x, y, width, height, payload } = props;
-            if (!payload || height === 0) return null;
-            const color = payload.isUp ? '#00e676' : '#ff5252';
+            const { x, width, payload, yAxis } = props;
+            if (!payload || !yAxis?.scale) return null;
+            const { open, close, isUp } = payload;
+            if (open === undefined || close === undefined) return null;
+            const yOpen = yAxis.scale(open);
+            const yClose = yAxis.scale(close);
+            const y = Math.min(yOpen, yClose);
+            const height = Math.abs(yOpen - yClose);
+            const color = isUp ? '#00e676' : '#ff5252';
+            
+            const candleWidth = Math.max(width * 0.7, 4);
+            const candleX = x + (width - candleWidth) / 2;
+
             return (
               <rect
-                x={x}
+                x={candleX}
                 y={y}
-                width={Math.max(width, 3)}
+                width={candleWidth}
                 height={Math.max(height, 2)}
                 fill={color}
-                fillOpacity={0.85}
+                fillOpacity={0.9}
                 rx={1}
               />
             );
