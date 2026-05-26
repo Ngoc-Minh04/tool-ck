@@ -580,3 +580,63 @@ def get_market_overview_with_foreign() -> dict:
         "indices": indices,
         "foreign": foreign
     }
+
+
+def get_quarterly_financials(ticker: str) -> dict:
+    """Lấy kết quả kinh doanh theo quý từ vnstock, fallback mock nếu lỗi."""
+    ticker = ticker.upper()
+
+    def _make_mock():
+        import math
+        seed = sum(ord(c) for c in ticker)
+        base_rev = (seed % 8 + 2) * 800  # 1600 – 8000 tỷ
+        base_profit = base_rev * 0.16
+        quarters = ['Q2/23','Q3/23','Q4/23','Q1/24','Q2/24','Q3/24','Q4/24','Q1/25']
+        rows = []
+        for i, q in enumerate(quarters):
+            rev    = round(base_rev    * (1 + i * 0.04 + math.sin(i) * 0.08))
+            profit = round(base_profit * (1 + i * 0.06 + math.cos(i) * 0.07))
+            rows.append({"quarter": q, "revenue": rev, "profit": profit})
+        return {"ticker": ticker, "data": rows, "is_mock": True}
+
+    try:
+        Vnstock_ = _get_vnstock()
+        if Vnstock_ is None:
+            return _make_mock()
+
+        stock = Vnstock_().stock(symbol=ticker, source="TCBS")
+        
+        # Thử lấy income statement theo quý
+        try:
+            df = stock.finance.income_statement(period="quarter", lang="vi")
+            if df is None or df.empty:
+                raise ValueError("empty income statement")
+            
+            # Chuẩn hóa tên cột linh hoạt
+            df.columns = [str(c).lower().strip() for c in df.columns]
+            rev_col    = next((c for c in df.columns if 'doanh thu' in c or 'revenue' in c or 'net_revenue' in c), None)
+            profit_col = next((c for c in df.columns if 'lợi nhuận sau' in c or 'net_profit' in c or 'profit_after' in c), None)
+            period_col = next((c for c in df.columns if 'period' in c or 'quarter' in c or 'kỳ' in c or 'quý' in c), None)
+
+            if not rev_col or not profit_col:
+                raise ValueError(f"Missing cols. Available: {df.columns.tolist()}")
+
+            rows = []
+            for _, row in df.tail(8).iterrows():
+                period_label = str(row.get(period_col, '')) if period_col else ''
+                rows.append({
+                    "quarter": period_label or f"Q{_+1}",
+                    "revenue": int(row[rev_col] / 1e9) if pd.notna(row[rev_col]) else 0,  # VND -> tỷ
+                    "profit":  int(row[profit_col] / 1e9) if pd.notna(row[profit_col]) else 0,
+                })
+
+            logger.info(f"Quarterly financials for {ticker}: {len(rows)} quarters")
+            return {"ticker": ticker, "data": rows, "is_mock": False}
+
+        except Exception as e:
+            logger.warning(f"Quarterly income statement failed for {ticker}: {e}")
+            return _make_mock()
+
+    except Exception as e:
+        logger.error(f"get_quarterly_financials error for {ticker}: {e}")
+        return _make_mock()

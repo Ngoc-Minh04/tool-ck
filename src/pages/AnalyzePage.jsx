@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { AlertCircle, Settings, GitCompare } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import TickerForm from '../components/Analysis/TickerForm';
 import ResultCard from '../components/Analysis/ResultCard';
 import FundamentalsTab from '../components/Analysis/FundamentalsTab';
@@ -19,6 +19,7 @@ import WatchlistButton from '../components/Analysis/WatchlistButton';
 import useWatchlist from '../store/watchlistStore';
 import toast from 'react-hot-toast';
 import { STOCK_ANALYST_SYSTEM_PROMPT, buildAnalysisPrompt } from '../constants/prompts';
+import { stockApi } from '../services/stockApi';
 
 const CHART_PERIODS = [
   { value: '1M', label: '1T' },
@@ -104,6 +105,9 @@ const AnalyzePage = () => {
   const [compareMode, setCompareMode] = useState(false);
   const [compareTicker, setCompareTicker] = useState('');
   const [compareAnalyzed, setCompareAnalyzed] = useState(false);
+  const [quarterlyData, setQuarterlyData] = useState(null);
+
+  const [searchParams] = useSearchParams();
 
   const { loading: aiLoading, analyze } = useClaude();
   const stock1 = useStockData();
@@ -113,6 +117,16 @@ const AnalyzePage = () => {
   const updateSignal = useWatchlist((s) => s.updateSignal);
   const settings = useAppStore((s) => s.settings);
   const navigate = useNavigate();
+
+  // Autorun khi điến từ Watchlist/Screener với ?autorun=1
+  useEffect(() => {
+    const ticker   = searchParams.get('ticker');
+    const exchange = searchParams.get('exchange') || 'HOSE';
+    const autorun  = searchParams.get('autorun');
+    if (ticker && autorun === '1') {
+      handleAnalyze({ ticker, exchange, timeframe: 'T3', sources: settings.sources });
+    }
+  }, []); // chỉ chạy 1 lần khi mount
 
   // Fetch chart data khi thay đổi period
   useEffect(() => {
@@ -127,8 +141,16 @@ const AnalyzePage = () => {
     setCurrentParams({ ticker, exchange, timeframe });
     setResult(null);
     setCompareAnalyzed(false);
+    setQuarterlyData(null);
 
-    const liveData = await stock1.fetchAll(ticker, chartPeriod);
+    const [liveData] = await Promise.all([
+      stock1.fetchAll(ticker, chartPeriod),
+    ]);
+
+    // Fetch quarterly tài chính song song (không block AI)
+    stockApi.getQuarterly(ticker)
+      .then(res => setQuarterlyData(res?.data || null))
+      .catch(() => setQuarterlyData(null));
 
     const prompt = buildAnalysisPrompt({
       ticker,
@@ -353,7 +375,7 @@ const AnalyzePage = () => {
                     )}
                     {chartTab === 'indicators' && <IndicatorPanel data={stock1.ohlcv} />}
                     {chartTab === 'quarterly' && (
-                      <QuarterlyChart ticker={currentParams?.ticker} quarterlyData={null} />
+                      <QuarterlyChart ticker={currentParams?.ticker} quarterlyData={quarterlyData} />
                     )}
                   </>
                 )}

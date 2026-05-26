@@ -1,11 +1,11 @@
 // ===== TICKER FORM =====
 // Form nhập thông tin để phân tích cổ phiếu
 
-import { useState, useEffect, useCallback } from 'react';
-import { Search, Zap, RefreshCw } from 'lucide-react';
-import { Button, Select, Tabs } from '../UI';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, Zap, X } from 'lucide-react';
+import { Button, Tabs } from '../UI';
 import useAppStore from '../../store/appStore';
-import { EXCHANGES, TIMEFRAMES, POPULAR_TICKERS } from '../../constants/sources';
+import { EXCHANGES, TIMEFRAMES, POPULAR_TICKERS, TICKER_DIRECTORY } from '../../constants/sources';
 import { History } from 'lucide-react';
 
 const TickerForm = ({ onAnalyze, loading }) => {
@@ -14,9 +14,21 @@ const TickerForm = ({ onAnalyze, loading }) => {
   const history = useAppStore((s) => s.history);
 
   const [ticker, setTicker] = useState('');
-  const [exchange, setExchange] = useState(settings.defaultExchange);
-  const [timeframe, setTimeframe] = useState(settings.defaultTimeframe);
+  const [exchange, setExchange] = useState(settings.defaultExchange || 'HOSE');
+  const [timeframe, setTimeframe] = useState(settings.defaultTimeframe || 'T3');
   const [debouncedTicker, setDebouncedTicker] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Autocomplete suggestions
+  const suggestions = ticker.trim().length >= 1
+    ? TICKER_DIRECTORY.filter((t) => {
+        const q = ticker.toUpperCase().trim();
+        return t.ticker.startsWith(q) || t.name.toUpperCase().includes(q);
+      }).slice(0, 8)
+    : [];
 
   // Debounce 300ms
   useEffect(() => {
@@ -26,14 +38,39 @@ const TickerForm = ({ onAnalyze, loading }) => {
     return () => clearTimeout(timer);
   }, [ticker]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (!dropdownRef.current?.contains(e.target)) setShowDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectSuggestion = useCallback((item) => {
+    setTicker(item.ticker);
+    setDebouncedTicker(item.ticker);
+    setExchange(item.exchange || 'HOSE');
+    setShowDropdown(false);
+    setActiveIdx(-1);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   const handleSubmit = useCallback((e) => {
     e?.preventDefault();
     const t = debouncedTicker || ticker.toUpperCase().trim();
     if (!t) return;
+    setShowDropdown(false);
     onAnalyze({ ticker: t, exchange, timeframe, sources: settings.sources });
   }, [debouncedTicker, ticker, exchange, timeframe, settings.sources, onAnalyze]);
 
   const handleKeyDown = (e) => {
+    if (showDropdown && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)); return; }
+      if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); selectSuggestion(suggestions[activeIdx]); return; }
+      if (e.key === 'Escape') { setShowDropdown(false); return; }
+    }
     if (e.key === 'Enter') handleSubmit();
   };
 
@@ -46,18 +83,78 @@ const TickerForm = ({ onAnalyze, loading }) => {
 
       {/* Mã CK + Sàn */}
       <div className="flex gap-3">
-        <div className="flex-1 relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <div className="flex-1 relative" ref={dropdownRef}>
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" style={{ zIndex: 1 }} />
           <input
+            ref={inputRef}
             type="text"
             value={ticker}
-            onChange={(e) => setTicker(e.target.value.toUpperCase())}
+            onChange={(e) => {
+              setTicker(e.target.value.toUpperCase());
+              setShowDropdown(true);
+              setActiveIdx(-1);
+            }}
+            onFocus={() => ticker.trim() && setShowDropdown(true)}
             onKeyDown={handleKeyDown}
-            placeholder="Nhập mã CK (VD: ACB, VNM...)"
+            placeholder="Tìm mã CK hoặc tên công ty..."
             className="input-dark pl-9"
             maxLength={10}
             autoFocus
+            autoComplete="off"
           />
+          {ticker && (
+            <button
+              onClick={() => { setTicker(''); setDebouncedTicker(''); setShowDropdown(false); inputRef.current?.focus(); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 border-none bg-transparent cursor-pointer"
+            >
+              <X size={13} />
+            </button>
+          )}
+
+          {/* Autocomplete Dropdown */}
+          {showDropdown && suggestions.length > 0 && (
+            <div
+              className="absolute left-0 right-0 top-full mt-1 rounded-xl overflow-hidden"
+              style={{
+                background: '#0f2236',
+                border: '1px solid rgba(79,195,247,0.25)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                zIndex: 100,
+              }}
+            >
+              {suggestions.map((s, idx) => (
+                <div
+                  key={s.ticker}
+                  onMouseDown={() => selectSuggestion(s)}
+                  className="flex items-center justify-between px-3 py-2.5 cursor-pointer transition-all"
+                  style={{
+                    background: idx === activeIdx ? 'rgba(79,195,247,0.12)' : 'transparent',
+                    borderBottom: idx < suggestions.length - 1 ? '1px solid rgba(79,195,247,0.06)' : 'none',
+                  }}
+                  onMouseEnter={() => setActiveIdx(idx)}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm font-bold text-cyan-300 w-12">{s.ticker}</span>
+                    <span className="text-xs text-slate-400 truncate max-w-[140px]">{s.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(79,195,247,0.08)', color: '#64748b' }}
+                    >
+                      {s.sector}
+                    </span>
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded font-semibold"
+                      style={{ background: 'rgba(79,195,247,0.1)', color: '#4fc3f7' }}
+                    >
+                      {s.exchange}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <select
           value={exchange}

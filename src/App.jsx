@@ -9,6 +9,7 @@ import ChatPage from './pages/ChatPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import WatchlistPage from './pages/WatchlistPage';
+import ScreenerPage from './pages/ScreenerPage';
 import OnboardingModal from './components/UI/OnboardingModal';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 
@@ -49,10 +50,11 @@ function AppInner() {
         <OnboardingModal />
         <Routes>
           <Route path="/" element={<Navigate to="/analyze" replace />} />
-          <Route path="/analyze" element={<AnalyzePage />} />
-          <Route path="/market" element={<MarketPage />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/analyze"  element={<AnalyzePage />} />
+          <Route path="/market"   element={<MarketPage />} />
+          <Route path="/screener" element={<ScreenerPage />} />
+          <Route path="/chat"     element={<ChatPage />} />
+          <Route path="/history"  element={<HistoryPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/analyze" replace />} />

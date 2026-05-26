@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 import httpx
-from app.services.vnstock_service import get_ohlcv, get_stock_info, Vnstock
+from app.services.vnstock_service import get_ohlcv, get_stock_info, get_quarterly_financials, Vnstock
 from app.services.indicator_service import compute_indicators, compute_backtest, compute_support_resistance
 from app.services.cache_service import cache_get, cache_set
 from app.models.schemas import BacktestRequest
@@ -158,3 +158,19 @@ async def stock_peers(ticker: str = Query(...)):
     except Exception as e:
         logger.error(f"peers error {ticker}: {e}")
         return {"ticker": ticker.upper(), "industry": "", "peers": []}
+
+
+@router.get("/{ticker}/quarterly")
+async def quarterly_path(ticker: str):
+    return await quarterly(ticker=ticker)
+
+
+@router.get("/quarterly")
+async def quarterly(ticker: str = Query(...)):
+    key = f"quarterly:{ticker.upper()}"
+    cached = await cache_get(key)
+    if cached:
+        return cached
+    data = get_quarterly_financials(ticker)
+    await cache_set(key, data, ttl=3600)
+    return data

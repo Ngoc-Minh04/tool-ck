@@ -3,18 +3,19 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart2, MessageSquare, History, Settings, TrendingUp,
-  ChevronLeft, ChevronRight, Activity, Star
+  ChevronLeft, ChevronRight, Activity, Star, SlidersHorizontal
 } from 'lucide-react';
 import useAppStore from '../../store/appStore';
 import useWatchlist from '../../store/watchlistStore';
 
 const NAV_ITEMS = [
-  { path: '/analyze', icon: BarChart2, label: 'Phân tích CK', badge: null },
-  { path: '/market', icon: TrendingUp, label: 'Thị trường', badge: 'LIVE' },
-  { path: '/chat', icon: MessageSquare, label: 'Chat với AI', badge: null },
-  { path: '/history', icon: History, label: 'Lịch sử', badge: null },
-  { path: '/watchlist', icon: Star, label: 'Watchlist', badge: null },
-  { path: '/settings', icon: Settings, label: 'Cài đặt', badge: null },
+  { path: '/analyze',  icon: BarChart2,            label: 'Phân tích CK',    badge: null },
+  { path: '/market',   icon: TrendingUp,           label: 'Thị trường',      badge: 'LIVE' },
+  { path: '/screener', icon: SlidersHorizontal,    label: 'Screener',         badge: null },
+  { path: '/chat',     icon: MessageSquare,        label: 'Chat với AI',     badge: null },
+  { path: '/history',  icon: History,              label: 'Lịch sử',          badge: null },
+  { path: '/watchlist',icon: Star,                 label: 'Watchlist',        badge: null },
+  { path: '/settings', icon: Settings,             label: 'Cài đặt',          badge: null },
 ];
 
 const Sidebar = () => {

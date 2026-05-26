@@ -84,6 +84,16 @@ export const stockApi = {
     return res.data?.data || res.data || [];
   },
 
+  async getScreener({ exchange, min_pe, max_pe, min_roe, signal } = {}) {
+    const res = await api.get('/screener', { params: { exchange, min_pe, max_pe, min_roe, signal } });
+    return res.data?.data || res.data || [];
+  },
+
+  async getQuarterly(ticker) {
+    const res = await api.get(`/stock/${ticker.toUpperCase()}/quarterly`);
+    return res.data?.data || res.data;
+  },
+
   async getHealthDetail() {
     const res = await api.get('/health');
     return res.data;
