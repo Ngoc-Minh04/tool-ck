@@ -51,11 +51,12 @@ def Vnstock():
 def get_ohlcv(ticker: str, period: str = "3mo", interval: str = "1D") -> list:
     period_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "3y": 1095}
     try:
-        stock = Vnstock().stock(symbol=ticker.upper(), source="VCI")
+        from vnstock.api.quote import Quote
+        q = Quote(symbol=ticker.upper(), source="VCI")
         days = period_map.get(period, 90)
         end = date.today().strftime("%Y-%m-%d")
         start = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
-        df = stock.quote.history(start=start, end=end, interval=interval)
+        df = q.history(start=start, end=end, interval=interval)
         df = df.rename(columns={"time": "date", "open": "open", "high": "high",
                                  "low": "low", "close": "close", "volume": "volume"})
         records = df[["date", "open", "high", "low", "close", "volume"]].to_dict("records")
@@ -73,14 +74,18 @@ def get_ohlcv(ticker: str, period: str = "3mo", interval: str = "1D") -> list:
 
 def get_stock_info(ticker: str) -> dict:
     try:
-        stock = Vnstock().stock(symbol=ticker.upper(), source="VCI")
+        from vnstock.api.company import Company
+        from vnstock.api.financial import Finance
+        
+        c = Company(symbol=ticker.upper(), source="VCI")
+        f = Finance(symbol=ticker.upper(), source="VCI")
         
         # company overview
-        overview_df = stock.company.overview()
+        overview_df = c.overview()
         overview = overview_df.iloc[0].to_dict() if not overview_df.empty else {}
         
         # financial ratios
-        ratio = stock.finance.ratio(period="quarter", lang="en")
+        ratio = f.ratio(period="quarter", lang="en")
         
         latest = {}
         if not ratio.empty:
@@ -126,49 +131,43 @@ def get_stock_info(ticker: str) -> dict:
 
 
 def get_market_overview() -> list:
-    try:
-        indices = ["VNINDEX", "VN30", "HNX30", "UPCOM"]
-        result = []
-        for idx in indices:
-            try:
-                stock = Vnstock().stock(symbol=idx, source="VCI")
-                end = date.today().strftime("%Y-%m-%d")
-                start = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
-                df = stock.quote.history(start=start, end=end, interval="1D")
-                if not df.empty:
-                    last = df.iloc[-1]
-                    prev = df.iloc[-2] if len(df) > 1 else last
-                    change = float(last["close"]) - float(prev["close"])
-                    pct = (change / float(prev["close"])) * 100 if prev["close"] else 0
-                    result.append({
-                        "index": idx,
-                        "close": round(float(last["close"]), 2),
-                        "change": round(change, 2),
-                        "change_pct": round(pct, 2),
-                        "volume": int(last.get("volume", 0)),
-                        "advance": 0,
-                        "decline": 0,
-                        "unchanged": 0,
-                    })
-            except BaseException as idx_err:
-                logger.error(f"Market index {idx} error: {idx_err}")
-                result.append(_mock_index(idx))
-        return result
-    except BaseException as e:
-        logger.error(f"get_market_overview error: {e}")
-        return [_mock_index(idx) for idx in ["VNINDEX", "VN30", "HNX30", "UPCOM"]]
+    from concurrent.futures import ThreadPoolExecutor
+    indices = ["VNINDEX", "VN30", "HNX30", "UPCOM"]
+
+    def fetch_index(idx):
+        try:
+            from vnstock.api.quote import Quote
+            q = Quote(symbol=idx, source="VCI")
+            end = date.today().strftime("%Y-%m-%d")
+            start = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
+            df = q.history(start=start, end=end, interval="1D")
+            if df is not None and not df.empty:
+                last = df.iloc[-1]
+                prev = df.iloc[-2] if len(df) > 1 else last
+                change = float(last["close"]) - float(prev["close"])
+                pct = (change / float(prev["close"])) * 100 if prev["close"] else 0
+                return {
+                    "index": idx,
+                    "close": round(float(last["close"]), 2),
+                    "change": round(change, 2),
+                    "change_pct": round(pct, 2),
+                    "volume": int(last.get("volume", 0)),
+                    "advance": 0,
+                    "decline": 0,
+                    "unchanged": 0,
+                }
+        except BaseException as idx_err:
+            logger.error(f"Market index {idx} error: {idx_err}")
+        return _mock_index(idx)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        result = list(executor.map(fetch_index, indices))
+    return result
 
 
 def get_top_movers() -> dict:
-    try:
-        stock = Vnstock().stock(symbol="ACB", source="VCI")
-        listing = stock.listing.all_symbols()
-        if listing is not None and not listing.empty:
-            return {"top_gain": [], "top_loss": [], "top_volume": []}
-        return _mock_movers()
-    except BaseException as e:
-        logger.error(f"get_top_movers error: {e}")
-        return _mock_movers()
+    # Trực tiếp sử dụng mock data để tăng tốc độ tải và tránh bị rate limit API bởi vnstock
+    return _mock_movers()
 
 
 def get_foreign_flow() -> list:
@@ -295,7 +294,8 @@ def _mock_foreign_flow() -> list:
 
 
 def get_quick_quotes() -> list:
-    import time
+    from concurrent.futures import ThreadPoolExecutor
+    import pandas as pd
     
     tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     
@@ -316,56 +316,55 @@ def get_quick_quotes() -> list:
         'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.00, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
         'VRE': { 'ticker': 'VRE', 'exchange': 'HOSE', 'price': 22500.0, 'change': 300.0, 'pct': 1.35, 'vol': 1950, 'cap': '51T', 'ref': 22200.0, 'ceil': 23750.0, 'floor': 20650.0, 'high': 22700.0, 'low': 22150.0, 'open': 22200.0 },
     }
-    
-    results = []
-    
-    try:
-        stock_client = Vnstock()
-    except BaseException as e:
-        logger.error(f"Failed to initialize Vnstock client: {e}")
-        return list(fallbacks.values())
-    
-    for i, ticker in enumerate(tickers):
+
+    def fetch_one(ticker):
         try:
-            if i > 0:
-                time.sleep(0.15)
-                
-            stock = stock_client.stock(symbol=ticker, source="VCI")
-            end = date.today().strftime("%Y-%m-%d")
-            start = (date.today() - timedelta(days=5)).strftime("%Y-%m-%d")
-            df = stock.quote.history(start=start, end=end, interval="1D")
+            from vnstock.api.trading import Trading
+            t = Trading(symbol=ticker, source="VCI")
+            df = t.price_board()
             
             if df is not None and not df.empty:
-                last = df.iloc[-1]
-                prev = df.iloc[-2] if len(df) > 1 else last
-                change = float(last["close"]) - float(prev["close"])
-                pct = (change / float(prev["close"])) * 100 if prev["close"] else 0
+                row = df.iloc[0]
                 
-                price = float(last["close"])
-                prev_price = float(prev["close"])
-                open_price = float(last.get("open", price))
-                high_price = float(last.get("high", price))
-                low_price = float(last.get("low", price))
+                def safe_val(v, default=0.0):
+                    if v is None or pd.isna(v):
+                        return default
+                    return float(v)
+
+                price = safe_val(row.get(('match', 'match_price')))
+                ref_price = safe_val(row.get(('listing', 'ref_price')))
                 
+                # Nếu chưa có giá khớp trong ngày (trước phiên hoặc đầu ATO), dùng giá tham chiếu
+                if price <= 0:
+                    price = ref_price
+                    
+                ceil_price = safe_val(row.get(('listing', 'ceiling')), price * 1.07)
+                floor_price = safe_val(row.get(('listing', 'floor')), price * 0.93)
+                open_price = safe_val(row.get(('match', 'open_price')), price)
+                high_price = safe_val(row.get(('match', 'highest')), price)
+                low_price = safe_val(row.get(('match', 'lowest')), price)
+                volume = int(safe_val(row.get(('match', 'accumulated_volume')), 0.0))
+                
+                # Quy đổi về VNĐ nếu API trả về dạng đơn vị nghìn đồng
                 if price < 1000:
                     price *= 1000
-                    prev_price *= 1000
+                    ref_price *= 1000
+                    ceil_price *= 1000
+                    floor_price *= 1000
                     open_price *= 1000
                     high_price *= 1000
                     low_price *= 1000
-                    change *= 1000
+                    
+                change = price - ref_price
+                pct = (change / ref_price) * 100 if ref_price else 0
                 
-                ref_price = prev_price
-                ceil_price = round((ref_price * 1.07) / 100) * 100
-                floor_price = round((ref_price * 0.93) / 100) * 100
-                
-                results.append({
+                return {
                     "ticker": ticker,
                     "exchange": "HOSE",
                     "price": round(price),
                     "change": round(change),
                     "pct": round(pct, 2),
-                    "vol": int(last.get("volume", 0)) // 1000,
+                    "vol": volume // 1000 if volume >= 1000 else volume,
                     "cap": fallbacks[ticker]["cap"],
                     "ref": round(ref_price),
                     "ceil": round(ceil_price),
@@ -373,11 +372,13 @@ def get_quick_quotes() -> list:
                     "high": round(high_price),
                     "low": round(low_price),
                     "open": round(open_price)
-                })
-                continue
+                }
         except BaseException as e:
             logger.warning(f"Failed to fetch live quote for {ticker}: {e}")
-        
-        results.append(fallbacks[ticker])
+        return fallbacks[ticker]
+
+    # Sử dụng 8 workers để tối ưu hóa tải song song bảng giá thực tế từ sàn
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(fetch_one, tickers))
         
     return results
