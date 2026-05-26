@@ -394,7 +394,7 @@ const MarketPage = () => {
                         }}
                       >
                         {/* Pin Button */}
-                        <td className="py-2 px-2 w-6">
+                        <td className="py-1.5 px-2 w-6">
                           <button
                             id={`pin-${row.ticker}`}
                             title={isPinned ? 'Bỏ ghim' : 'Ghim lên đầu'}
@@ -409,38 +409,38 @@ const MarketPage = () => {
                           </button>
                         </td>
                         {/* Mã */}
-                        <td className="py-2 px-2 font-bold text-slate-200 whitespace-nowrap">
+                        <td className="py-1.5 px-2 font-bold text-slate-200 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             {isPinned && <span className="text-amber-400 text-xs leading-none">│</span>}
                             {row.ticker}
                           </div>
                         </td>
-                        <td className="py-2 px-2 text-slate-500">{row.exchange}</td>
-                        <td className="py-2 px-2 font-num text-fuchsia-400">{row.ceil ? row.ceil.toLocaleString('vi-VN') : '-'}</td>
-                        <td className="py-2 px-2 font-num text-cyan-400">{row.floor ? row.floor.toLocaleString('vi-VN') : '-'}</td>
-                        <td className="py-2 px-2 font-num text-yellow-400">{row.ref ? row.ref.toLocaleString('vi-VN') : '-'}</td>
-                        <td className={`py-2 px-2 font-num ${priceColorClass}`}>{row.price.toLocaleString('vi-VN')}</td>
-                        <td className={`py-2 px-2 font-num ${row.change > 0 ? 'text-green-400' : row.change < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        <td className="py-1.5 px-2 text-slate-500">{row.exchange}</td>
+                        <td className="py-1.5 px-2 font-num text-fuchsia-400">{row.ceil ? row.ceil.toLocaleString('vi-VN') : '-'}</td>
+                        <td className="py-1.5 px-2 font-num text-cyan-400">{row.floor ? row.floor.toLocaleString('vi-VN') : '-'}</td>
+                        <td className="py-1.5 px-2 font-num text-yellow-400">{row.ref ? row.ref.toLocaleString('vi-VN') : '-'}</td>
+                        <td className={`py-1.5 px-2 font-num ${priceColorClass}`}>{row.price.toLocaleString('vi-VN')}</td>
+                        <td className={`py-1.5 px-2 font-num ${row.change > 0 ? 'text-green-400' : row.change < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                           {row.change > 0 ? '+' : ''}{row.change.toLocaleString('vi-VN')}
                         </td>
-                        <td className={`py-2 px-2 font-num font-bold ${row.pct > 0 ? 'text-green-400' : row.pct < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        <td className={`py-1.5 px-2 font-num font-bold ${row.pct > 0 ? 'text-green-400' : row.pct < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                           {row.pct > 0 ? '+' : ''}{row.pct}%
                         </td>
                         {/* Sparkline */}
-                        <td className="py-2 px-2">
+                        <td className="py-1.5 px-2">
                           <Sparkline open={row.open} high={row.high} low={row.low} price={row.price} ref={row.ref} />
                         </td>
-                        <td className={`py-2 px-2 font-num ${getPriceColorClass(row.open, row.ceil, row.floor, row.ref)}`}>
+                        <td className={`py-1.5 px-2 font-num ${getPriceColorClass(row.open, row.ceil, row.floor, row.ref)}`}>
                           {row.open ? row.open.toLocaleString('vi-VN') : '-'}
                         </td>
-                        <td className={`py-2 px-2 font-num ${getPriceColorClass(row.high, row.ceil, row.floor, row.ref)}`}>
+                        <td className={`py-1.5 px-2 font-num ${getPriceColorClass(row.high, row.ceil, row.floor, row.ref)}`}>
                           {row.high ? row.high.toLocaleString('vi-VN') : '-'}
                         </td>
-                        <td className={`py-2 px-2 font-num ${getPriceColorClass(row.low, row.ceil, row.floor, row.ref)}`}>
+                        <td className={`py-1.5 px-2 font-num ${getPriceColorClass(row.low, row.ceil, row.floor, row.ref)}`}>
                           {row.low ? row.low.toLocaleString('vi-VN') : '-'}
                         </td>
-                        <td className="py-2 px-2 font-num text-cyan-400">{row.vol.toLocaleString('vi-VN')}</td>
-                        <td className="py-2 px-2 font-num text-slate-400">{row.cap}</td>
+                        <td className="py-1.5 px-2 font-num text-cyan-400">{row.vol.toLocaleString('vi-VN')}</td>
+                        <td className="py-1.5 px-2 font-num text-slate-400">{row.cap}</td>
                       </tr>
                     );
                   })
