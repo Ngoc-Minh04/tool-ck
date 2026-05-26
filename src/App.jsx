@@ -10,6 +10,7 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import WatchlistPage from './pages/WatchlistPage';
 import ScreenerPage from './pages/ScreenerPage';
+import AlertsPage from './pages/AlertsPage';
 import OnboardingModal from './components/UI/OnboardingModal';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 
@@ -53,6 +54,7 @@ function AppInner() {
           <Route path="/analyze"  element={<AnalyzePage />} />
           <Route path="/market"   element={<MarketPage />} />
           <Route path="/screener" element={<ScreenerPage />} />
+          <Route path="/alerts"   element={<AlertsPage />} />
           <Route path="/chat"     element={<ChatPage />} />
           <Route path="/history"  element={<HistoryPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
