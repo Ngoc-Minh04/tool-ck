@@ -209,7 +209,11 @@ def get_market_overview() -> list:
 
 
 def get_top_movers() -> dict:
-    # Trực tiếp sử dụng mock data để tăng tốc đdef get_foreign_flow() -> list:
+    # Trực tiếp sử dụng mock data để tăng tốc độ
+    return _mock_movers()
+
+
+def get_foreign_flow(df = None) -> list:
     import pandas as pd
     global _last_foreign_flow
     
@@ -231,9 +235,10 @@ def get_top_movers() -> dict:
     
     results = []
     try:
-        from vnstock.api.trading import Trading
-        t = Trading(symbol=tickers[0], source="VCI", show_log=False)
-        df = t.price_board(symbols_list=tickers)
+        if df is None:
+            from vnstock.api.trading import Trading
+            t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+            df = t.price_board(symbols_list=tickers)
         if df is not None and not df.empty:
             for idx_row, row in df.iterrows():
                 ticker = row.get(('listing', 'symbol'))
@@ -407,7 +412,7 @@ def _mock_foreign_flow() -> list:
 
 _last_live_quotes = {}
 
-def get_quick_quotes(ticker_list: list = None) -> list:
+def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     import pandas as pd
     
     default_tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
@@ -433,9 +438,10 @@ def get_quick_quotes(ticker_list: list = None) -> list:
     
     results = []
     try:
-        from vnstock.api.trading import Trading
-        t = Trading(symbol=tickers[0], source="VCI", show_log=False)
-        df = t.price_board(symbols_list=tickers)
+        if df is None:
+            from vnstock.api.trading import Trading
+            t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+            df = t.price_board(symbols_list=tickers)
         if df is not None and not df.empty:
             for idx_row, row in df.iterrows():
                 ticker = row.get(('listing', 'symbol'))
@@ -521,3 +527,22 @@ def get_quick_quotes(ticker_list: list = None) -> list:
                 results.append(fb_copy)
                 
     return results
+
+
+def get_market_overview_with_foreign() -> dict:
+    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
+    df = None
+    try:
+        from vnstock.api.trading import Trading
+        t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+        df = t.price_board(symbols_list=tickers)
+    except BaseException as e:
+        logger.warning(f"Failed to fetch combined price board in overview: {e}")
+        
+    foreign = get_foreign_flow(df=df)
+    indices = get_market_overview()
+    
+    return {
+        "indices": indices,
+        "foreign": foreign
+    }

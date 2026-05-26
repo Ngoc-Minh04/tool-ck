@@ -58,14 +58,12 @@ const useVnStock = () => {
     setLoading(true);
     setError(null);
     try {
-      const [overviewData, foreignData, quickQuotesData] = await Promise.all([
-        stockApi.getMarketOverview(),
-        stockApi.getForeignFlow(),
-        stockApi.getQuickQuotes(),
-      ]);
+      const overviewData = await stockApi.getMarketOverview();
+      const indicesList = overviewData.indices || [];
+      const foreignData = overviewData.foreign || [];
 
-      const parsedIndices = Array.isArray(overviewData)
-        ? overviewData.map(item => ({
+      const parsedIndices = Array.isArray(indicesList)
+        ? indicesList.map(item => ({
             name: item.index || '',
             value: item.close || 0,
             change: item.change || 0,
@@ -90,15 +88,11 @@ const useVnStock = () => {
           .sort((a, b) => a.value - b.value);
           
         parsedForeign = { topBuy: buyList, topSell: sellList };
-      } else if (foreignData && foreignData.topBuy && foreignData.topSell) {
-        parsedForeign = foreignData;
       }
 
       return {
         indices: parsedIndices,
         foreign: parsedForeign,
-        sectors: getSectorData(quickQuotesData),
-        quickQuotes: quickQuotesData || [],
         isOffline: false,
       };
     } catch (err) {
@@ -106,8 +100,6 @@ const useVnStock = () => {
       return {
         indices: getMarketIndices(),
         foreign: getForeignTrades(),
-        sectors: getSectorData(),
-        quickQuotes: [],
         isOffline: true,
       };
     } finally {

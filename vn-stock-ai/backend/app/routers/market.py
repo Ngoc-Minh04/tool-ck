@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.services.vnstock_service import get_market_overview, get_top_movers, get_foreign_flow, get_quick_quotes
+from app.services.vnstock_service import get_market_overview, get_top_movers, get_foreign_flow, get_quick_quotes, get_market_overview_with_foreign
 from app.services.cache_service import cache_get, cache_set
 from fastapi.concurrency import run_in_threadpool
 
@@ -10,8 +10,8 @@ async def overview():
     cached = await cache_get("market:overview")
     if cached:
         return cached
-    data = await run_in_threadpool(get_market_overview)
-    await cache_set("market:overview", data, ttl=20)
+    data = await run_in_threadpool(get_market_overview_with_foreign)
+    await cache_set("market:overview", data, ttl=40)
     return data
 
 @router.get("/movers")

@@ -8,6 +8,7 @@ import SectorSignals from '../components/Market/SectorSignals';
 import ForeignTrading from '../components/Market/ForeignTrading';
 import { SkeletonCard, Button } from '../components/UI';
 import useVnStock from '../hooks/useVnStock';
+import { getSectorData } from '../services/vnstockService';
 
 // ===== HELPERS =====
 
@@ -123,7 +124,7 @@ const MarketPage = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 20000); // Tải dữ liệu thật mỗi 20 giây (an toàn cho API nhờ gộp nhóm)
+    const interval = setInterval(loadData, 40000); // Tải dữ liệu thật mỗi 40 giây (tối ưu hóa cực hạn)
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -137,52 +138,7 @@ const MarketPage = () => {
     });
   }, []);
 
-  const rawQuotes = (marketData && !marketData.isOffline && marketData.quickQuotes?.length)
-    ? marketData.quickQuotes
-    : fallbackQuotes;
-
-  // Lắng nghe rawQuotes để so sánh và kích hoạt flash nhấp nháy dòng khi giá thật thay đổi
-  useEffect(() => {
-    if (!rawQuotes?.length) return;
-
-    setQuotesState(prev => {
-      if (!prev.length) return rawQuotes;
-
-      const newFlashes = {};
-      const nextQuotes = rawQuotes.map(rawRow => {
-        const prevRow = prev.find(p => p.ticker === rawRow.ticker);
-        
-        // Nếu dòng cũ trong State đã có giá thật (is_live === true) nhưng dòng mới lại là mock (is_live === false)
-        // thì giữ lại dòng cũ để không bị ghi đè thành dữ liệu mock
-        if (prevRow && prevRow.is_live && !rawRow.is_live) {
-          return prevRow;
-        }
-
-        // Nhấp nháy chỉ khi giá thật sự thay đổi từ sàn và là giá thật
-        if (prevRow && prevRow.price !== rawRow.price && rawRow.is_live) {
-          newFlashes[rawRow.ticker] = rawRow.price > prevRow.price ? 'up' : 'down';
-        }
-        return rawRow;
-      });
-
-      if (Object.keys(newFlashes).length > 0) {
-        setFlashStates(prevFlashes => ({ ...prevFlashes, ...newFlashes }));
-        
-        // Tự động xóa trạng thái nháy sau 1 giây
-        setTimeout(() => {
-          setFlashStates(prevFlashes => {
-            const next = { ...prevFlashes };
-            Object.keys(newFlashes).forEach(t => delete next[t]);
-            return next;
-          });
-        }, 1000);
-      }
-
-      return nextQuotes;
-    });
-  }, [rawQuotes]);
-
-  // Lấy dữ liệu thực từ sàn cho FPT và MBB mỗi 3 giây
+  // Lấy dữ liệu thực từ sàn cho toàn bộ 15 mã cổ phiếu mỗi 1.5 giây
   useEffect(() => {
     const checkMarket = () => {
       const now = new Date();
@@ -194,11 +150,12 @@ const MarketPage = () => {
       return day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 915;
     };
 
-    const timer = setInterval(async () => {
-      if (!checkMarket()) return;
+    const updateQuotes = async (isInitial = false) => {
+      // Nếu không phải lần đầu tiên và thị trường đóng cửa thì không gửi request để tiết kiệm
+      if (!isInitial && !checkMarket()) return;
 
       try {
-        const liveData = await fetchQuickQuotes('FPT,MBB');
+        const liveData = await fetchQuickQuotes('VCB,BID,CTG,FPT,HPG,VIC,VNM,ACB,MBB,TCB,SSI,MWG,GAS,VHM,VRE');
         if (!liveData || !liveData.length) return;
 
         setQuotesState(prev => {
@@ -214,7 +171,8 @@ const MarketPage = () => {
                 return row;
               }
 
-              if (row.price !== liveRow.price && liveRow.is_live) {
+              // Chỉ nhấp nháy khi thị trường đang trong giờ giao dịch
+              if (row.price !== liveRow.price && liveRow.is_live && checkMarket()) {
                 newFlashes[row.ticker] = liveRow.price > row.price ? 'up' : 'down';
               }
               return {
@@ -239,10 +197,14 @@ const MarketPage = () => {
           return nextQuotes;
         });
       } catch (err) {
-        console.error("Failed to fetch live quotes for FPT/MBB:", err);
+        console.error("Failed to fetch live quotes:", err);
       }
-    }, 1500);
+    };
 
+    // Tải dữ liệu thực lần đầu ngay khi mount (kể cả ngoài giờ giao dịch để hiển thị giá đóng cửa phiên cuối)
+    updateQuotes(true);
+
+    const timer = setInterval(() => updateQuotes(false), 1500);
     return () => clearInterval(timer);
   }, [fetchQuickQuotes]);
 
@@ -259,7 +221,8 @@ const MarketPage = () => {
   unpinned.sort((a, b) => (b.pct || 0) - (a.pct || 0));
   const quotes = [...pinned, ...unpinned];
 
-  const isMockData = !marketData || marketData.isOffline || !marketData.quickQuotes?.length;
+  const isMockData = quotesState.every(q => !q.is_live);
+  const sectors = getSectorData(quotesState);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -442,7 +405,7 @@ const MarketPage = () => {
             {/* Footer: Thông tin tóm tắt */}
             <div className="mt-2.5 pt-2.5 flex items-center justify-between text-[10px] text-slate-600" style={{ borderTop: '1px solid rgba(79,195,247,0.06)' }}>
               <span>{quotes.length} mã đang hiển thị</span>
-              <span>Cập nhật mỗi 15 giây · Nguồn: VCI</span>
+              <span>Thời gian thực (1.5s) · Nguồn: VCI</span>
             </div>
           </div>
 
@@ -452,7 +415,7 @@ const MarketPage = () => {
               <><SkeletonCard /><SkeletonCard /></>
             ) : (
               <>
-                <SectorSignals sectors={marketData?.sectors || []} />
+                <SectorSignals sectors={sectors} />
                 <ForeignTrading data={marketData?.foreign} />
               </>
             )}

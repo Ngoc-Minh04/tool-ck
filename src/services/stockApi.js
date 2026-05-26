@@ -26,7 +26,7 @@ export const stockApi = {
 
   async getMarketOverview() {
     const res = await api.get('/market/overview');
-    return res.data?.data || res.data || [];
+    return res.data?.data || res.data || {};
   },
 
   async getTopMovers() {
