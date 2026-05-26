@@ -21,6 +21,7 @@ const TickerForm = ({ onAnalyze, loading }) => {
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const isLight = settings.theme === 'light';
 
   // Autocomplete suggestions
   const suggestions = ticker.trim().length >= 1
@@ -114,11 +115,11 @@ const TickerForm = ({ onAnalyze, loading }) => {
           {/* Autocomplete Dropdown */}
           {showDropdown && suggestions.length > 0 && (
             <div
-              className="absolute left-0 right-0 top-full mt-1 rounded-xl overflow-hidden"
+              className="absolute left-0 right-0 top-full mt-1 rounded-xl overflow-hidden animate-fade-in-up"
               style={{
-                background: '#0f2236',
-                border: '1px solid rgba(79,195,247,0.25)',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                background: isLight ? '#ffffff' : '#0f2236',
+                border: isLight ? '1px solid rgba(79,195,247,0.35)' : '1px solid rgba(79,195,247,0.25)',
+                boxShadow: isLight ? '0 10px 25px rgba(0,0,0,0.08)' : '0 8px 32px rgba(0,0,0,0.5)',
                 zIndex: 100,
               }}
             >
@@ -129,7 +130,7 @@ const TickerForm = ({ onAnalyze, loading }) => {
                   className="flex items-center justify-between px-3 py-2.5 cursor-pointer transition-all"
                   style={{
                     background: idx === activeIdx ? 'rgba(79,195,247,0.12)' : 'transparent',
-                    borderBottom: idx < suggestions.length - 1 ? '1px solid rgba(79,195,247,0.06)' : 'none',
+                    borderBottom: idx < suggestions.length - 1 ? (isLight ? '1px solid rgba(79,195,247,0.12)' : '1px solid rgba(79,195,247,0.06)') : 'none',
                   }}
                   onMouseEnter={() => setActiveIdx(idx)}
                 >
@@ -188,9 +189,9 @@ const TickerForm = ({ onAnalyze, loading }) => {
               onClick={() => toggleSource(source.id)}
               className="text-xs px-3 py-1 rounded-full cursor-pointer transition-all duration-200 border-none"
               style={{
-                background: source.enabled ? `${source.color}20` : 'rgba(26,47,69,0.8)',
-                color: source.enabled ? source.color : '#4a6b8a',
-                border: `1px solid ${source.enabled ? source.color + '50' : 'rgba(79,195,247,0.1)'}`,
+                background: source.enabled ? `${source.color}20` : isLight ? 'rgba(0,0,0,0.03)' : 'rgba(26,47,69,0.8)',
+                color: source.enabled ? source.color : isLight ? '#64748b' : '#4a6b8a',
+                border: `1px solid ${source.enabled ? source.color + '50' : isLight ? 'rgba(79,195,247,0.2)' : 'rgba(79,195,247,0.1)'}`,
                 fontWeight: source.enabled ? 600 : 400,
               }}
               title={source.description}
@@ -214,8 +215,8 @@ const TickerForm = ({ onAnalyze, loading }) => {
               }}
               className="text-xs px-2 py-0.5 rounded cursor-pointer transition-all border-none hover:text-cyan-400"
               style={{
-                background: ticker === t ? 'rgba(79,195,247,0.15)' : 'rgba(26,47,69,0.6)',
-                color: ticker === t ? '#4fc3f7' : '#64748b',
+                background: ticker === t ? 'rgba(79,195,247,0.15)' : isLight ? 'rgba(0,0,0,0.04)' : 'rgba(26,47,69,0.6)',
+                color: ticker === t ? '#4fc3f7' : isLight ? '#475569' : '#64748b',
                 border: `1px solid ${ticker === t ? 'rgba(79,195,247,0.3)' : 'transparent'}`,
               }}
             >

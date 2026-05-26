@@ -22,22 +22,24 @@ const NAV_ITEMS = [
 const Sidebar = () => {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const settings = useAppStore((s) => s.settings);
   const history = useAppStore((s) => s.history);
   const watchlistLength = useWatchlist((s) => s.items.length);
+  const isLight = settings.theme === 'light';
 
   return (
     <aside
       className="flex flex-col transition-all duration-300 relative"
       style={{
         width: sidebarOpen ? 220 : 64,
-        background: 'linear-gradient(180deg, #0f2035 0%, #0d1b2a 100%)',
-        borderRight: '1px solid rgba(79, 195, 247, 0.1)',
+        background: isLight ? 'linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%)' : 'linear-gradient(180deg, #0f2035 0%, #0d1b2a 100%)',
+        borderRight: isLight ? '1px solid rgba(79, 195, 247, 0.22)' : '1px solid rgba(79, 195, 247, 0.1)',
         minHeight: '100vh',
         flexShrink: 0,
       }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: '1px solid rgba(79,195,247,0.1)' }}>
+      <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: isLight ? '1px solid rgba(79,195,247,0.22)' : '1px solid rgba(79,195,247,0.1)' }}>
         <div
           className="flex items-center justify-center rounded-lg flex-shrink-0"
           style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #1a3a5c, #4fc3f7)', boxShadow: '0 0 12px rgba(79,195,247,0.4)' }}
@@ -78,7 +80,7 @@ const Sidebar = () => {
             {path === '/history' && sidebarOpen && history.length > 0 && (
               <span
                 className="text-xs font-bold rounded-full flex items-center justify-center"
-                style={{ background: '#1a3a5c', color: '#4fc3f7', minWidth: 20, height: 20, fontSize: '10px' }}
+                style={{ background: isLight ? '#e2e8f0' : '#1a3a5c', color: '#4fc3f7', minWidth: 20, height: 20, fontSize: '10px' }}
               >
                 {history.length > 99 ? '99+' : history.length}
               </span>
@@ -109,10 +111,11 @@ const Sidebar = () => {
         style={{
           width: 24,
           height: 24,
-          background: '#1a3a5c',
-          border: '1px solid rgba(79,195,247,0.3)',
+          background: isLight ? '#ffffff' : '#1a3a5c',
+          border: isLight ? '1px solid rgba(79,195,247,0.4)' : '1px solid rgba(79,195,247,0.3)',
           color: '#4fc3f7',
           zIndex: 10,
+          boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
         }}
       >
         {sidebarOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}

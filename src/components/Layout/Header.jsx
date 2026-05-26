@@ -36,12 +36,14 @@ const Header = ({ title = 'VN Stock AI Analyzer' }) => {
   const hasApiKey = (settings.apiKey && !settings.apiKey.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && settings.apiKey.trim() !== '' && settings.apiKey !== 'sk-ant-api03-' && settings.apiKey !== 'your_key_here') || 
                     (import.meta.env.VITE_ANTHROPIC_API_KEY && !import.meta.env.VITE_ANTHROPIC_API_KEY.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && import.meta.env.VITE_ANTHROPIC_API_KEY.trim() !== '' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'sk-ant-api03-' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'your_key_here');
 
+  const isLight = settings.theme === 'light';
+
   return (
     <header
       className="flex items-center justify-between px-6 py-3 flex-shrink-0"
       style={{
-        background: 'rgba(13, 27, 42, 0.95)',
-        borderBottom: '1px solid rgba(79, 195, 247, 0.1)',
+        background: isLight ? 'rgba(255, 255, 255, 0.92)' : 'rgba(13, 27, 42, 0.95)',
+        borderBottom: isLight ? '1px solid rgba(79, 195, 247, 0.22)' : '1px solid rgba(79, 195, 247, 0.1)',
         backdropFilter: 'blur(12px)',
         height: 60,
       }}

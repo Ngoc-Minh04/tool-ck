@@ -22,6 +22,18 @@ function AppInner() {
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
 
+  // Sync theme to HTML class
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.theme === 'light') {
+      root.classList.add('light');
+      root.classList.remove('dark');
+    } else {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    }
+  }, [settings.theme]);
+
   useEffect(() => {
     const isKeyPlaceholder = (key) => {
       if (!key) return true;
@@ -42,7 +54,7 @@ function AppInner() {
   }, [settings.apiKey, updateSettings]);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#0d1b2a' }}>
+    <div className="app-container" style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100vw' }}>
       {/* Sidebar */}
       <Sidebar />
 

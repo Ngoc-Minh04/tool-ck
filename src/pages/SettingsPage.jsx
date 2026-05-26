@@ -168,23 +168,27 @@ const SettingsPage = () => {
             <div className="flex gap-3">
               {[
                 { value: 'dark', label: 'Tối', icon: Moon },
-                { value: 'light', label: 'Sáng (sắp ra mắt)', icon: Sun, disabled: true },
-              ].map(({ value, label, icon: Icon, disabled }) => (
-                <button
-                  key={value}
-                  disabled={disabled}
-                  onClick={() => !disabled && updateSettings({ theme: value })}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg cursor-pointer border-none transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{
-                    background: settings.theme === value ? 'rgba(79,195,247,0.15)' : 'rgba(13,27,42,0.5)',
-                    border: `1px solid ${settings.theme === value ? 'rgba(79,195,247,0.4)' : 'rgba(79,195,247,0.08)'}`,
-                    color: settings.theme === value ? '#4fc3f7' : '#64748b',
-                  }}
-                >
-                  <Icon size={14} />
-                  <span className="text-sm">{label}</span>
-                </button>
-              ))}
+                { value: 'light', label: 'Sáng', icon: Sun },
+              ].map(({ value, label, icon: Icon, disabled }) => {
+                const isActive = settings.theme === value;
+                const isLight = settings.theme === 'light';
+                return (
+                  <button
+                    key={value}
+                    disabled={disabled}
+                    onClick={() => !disabled && updateSettings({ theme: value })}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg cursor-pointer border-none transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: isActive ? 'rgba(79,195,247,0.18)' : isLight ? 'rgba(0,0,0,0.04)' : 'rgba(13,27,42,0.5)',
+                      border: `1px solid ${isActive ? 'rgba(79,195,247,0.4)' : isLight ? 'rgba(79,195,247,0.15)' : 'rgba(79,195,247,0.08)'}`,
+                      color: isActive ? '#4fc3f7' : isLight ? '#475569' : '#64748b',
+                    }}
+                  >
+                    <Icon size={14} />
+                    <span className="text-sm">{label}</span>
+                  </button>
+                );
+              })}
             </div>
           </SettingsSection>
 
