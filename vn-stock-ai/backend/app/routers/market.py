@@ -11,7 +11,7 @@ async def overview():
     if cached:
         return cached
     data = await run_in_threadpool(get_market_overview)
-    await cache_set("market:overview", data, ttl=180)
+    await cache_set("market:overview", data, ttl=30)
     return data
 
 @router.get("/movers")
@@ -29,7 +29,7 @@ async def foreign():
     if cached:
         return cached
     data = await run_in_threadpool(get_foreign_flow)
-    await cache_set("market:foreign", data, ttl=300)
+    await cache_set("market:foreign", data, ttl=30)
     return data
 
 @router.get("/quick-quotes")
