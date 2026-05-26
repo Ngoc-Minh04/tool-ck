@@ -2,7 +2,7 @@
 // Hiển thị RSI, MACD
 
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Bar, Cell, ComposedChart
 } from 'recharts';
 import { useMemo } from 'react';
 
@@ -71,13 +71,16 @@ const MACDChart = ({ data = [], height = 100 }) => {
     <div>
       <div className="flex items-center gap-3 mb-1 text-xs text-slate-500">
         <span>MACD(12,26,9)</span>
-        <span className="flex items-center gap-2">
-          <span className="inline-block w-3 h-0.5 bg-cyan-400" />MACD
-          <span className="inline-block w-3 h-0.5 bg-yellow-400" />Signal
-        </span>
+        {displayData.length > 0 && (
+          <span className="font-num text-[10px] text-slate-400">
+            MACD: <span className="text-cyan-400 mr-2">{displayData[displayData.length - 1]?.macd?.toFixed(2) ?? 'N/A'}</span>
+            Signal: <span className="text-yellow-400 mr-2">{displayData[displayData.length - 1]?.macd_signal?.toFixed(2) ?? 'N/A'}</span>
+            Hist: <span className={displayData[displayData.length - 1]?.macd_hist >= 0 ? 'text-green-400' : 'text-red-400'}>{displayData[displayData.length - 1]?.macd_hist?.toFixed(2) ?? 'N/A'}</span>
+          </span>
+        )}
       </div>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={displayData} margin={{ top: 2, right: 10, left: 10, bottom: 0 }}>
+        <ComposedChart data={displayData} margin={{ top: 2, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(79,195,247,0.05)" vertical={false} />
           <XAxis dataKey="date" hide />
           <YAxis
@@ -92,23 +95,25 @@ const MACDChart = ({ data = [], height = 100 }) => {
               const d = payload[0]?.payload;
               return (
                 <div className="p-2 text-xs rounded space-y-1" style={{ background: '#162336', border: '1px solid rgba(79,195,247,0.2)' }}>
-                  <div><span className="text-cyan-400">MACD: </span><span className="font-num">{d.macd}</span></div>
-                  <div><span className="text-yellow-400">Signal: </span><span className="font-num">{d.macdSignal}</span></div>
-                  <div><span className="text-slate-400">Hist: </span><span className={`font-num ${d.macdHistogram > 0 ? 'text-green-400' : 'text-red-400'}`}>{d.macdHistogram}</span></div>
+                  <div><span className="text-cyan-400">MACD: </span><span className="font-num">{d.macd?.toFixed(4) ?? 'N/A'}</span></div>
+                  <div><span className="text-yellow-400">Signal: </span><span className="font-num">{d.macd_signal?.toFixed(4) ?? 'N/A'}</span></div>
+                  <div><span className="text-slate-400">Hist: </span><span className={`font-num ${d.macd_hist > 0 ? 'text-green-400' : 'text-red-400'}`}>{d.macd_hist?.toFixed(4) ?? 'N/A'}</span></div>
                 </div>
               );
             }}
           />
           <ReferenceLine y={0} stroke="rgba(79,195,247,0.2)" />
-          <Bar dataKey="macdHistogram" maxBarSize={8} radius={[2, 2, 0, 0]}>
+          <Bar dataKey="macd_hist" maxBarSize={6} radius={[1, 1, 0, 0]}>
             {displayData.map((entry, i) => (
               <Cell
                 key={i}
-                fill={entry.macdHistogram >= 0 ? 'rgba(0,230,118,0.6)' : 'rgba(255,82,82,0.6)'}
+                fill={entry.macd_hist >= 0 ? 'rgba(0,230,118,0.5)' : 'rgba(255,82,82,0.5)'}
               />
             ))}
           </Bar>
-        </BarChart>
+          <Line type="monotone" dataKey="macd" stroke="#4fc3f7" dot={false} strokeWidth={1.2} />
+          <Line type="monotone" dataKey="macd_signal" stroke="#ffb300" dot={false} strokeWidth={1.2} />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

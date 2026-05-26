@@ -94,10 +94,10 @@ export function useStockData() {
           stockApi.getNews(ticker),
         ]);
         
-        setOhlcv(fullData.ohlcv || []);
-        const ohlcvList = fullData.ohlcv || [];
-        const lastBar = ohlcvList[ohlcvList.length - 1] || {};
-        const prevBar = ohlcvList[ohlcvList.length - 2] || lastBar;
+        const enrichedOhlcv = enrichOHLCV(fullData.ohlcv || []);
+        setOhlcv(enrichedOhlcv);
+        const lastBar = enrichedOhlcv[enrichedOhlcv.length - 1] || {};
+        const prevBar = enrichedOhlcv[enrichedOhlcv.length - 2] || lastBar;
         const currentPrice = lastBar.close || 0;
         const change = prevBar.close ? (lastBar.close - prevBar.close) / prevBar.close : 0;
         const volume = lastBar.volume || 0;
@@ -117,7 +117,7 @@ export function useStockData() {
             eps: fullData.info?.eps,
             marketCap: fullData.info?.market_cap,
           },
-          foreignNet: 0,
+          foreignNet: fullData.info?.foreign_net || 0,
         };
 
         setInfo(infoObj);

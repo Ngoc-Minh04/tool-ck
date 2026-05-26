@@ -184,13 +184,21 @@ const ResultCard = ({ result, ticker, exchange, timeframe, stockInfo, onSave, on
             </div>
             <div className="glass-card p-3">
               <div className="text-xs text-slate-500 mb-1">P/E</div>
-              <div className="font-num text-base font-semibold text-slate-200">{fundamentals?.pe ?? 'N/A'}x</div>
-              <div className="text-xs text-slate-500">P/B: {fundamentals?.pb ?? 'N/A'}x</div>
+              <div className="font-num text-base font-semibold text-slate-200">
+                {fundamentals?.pe != null ? `${Number(fundamentals.pe).toFixed(2)}x` : 'N/A'}
+              </div>
+              <div className="text-xs text-slate-500">
+                P/B: {fundamentals?.pb != null ? `${Number(fundamentals.pb).toFixed(2)}x` : 'N/A'}
+              </div>
             </div>
             <div className="glass-card p-3">
               <div className="text-xs text-slate-500 mb-1">ROE</div>
-              <div className="font-num text-base font-semibold text-slate-200">{fundamentals?.roe ?? 'N/A'}%</div>
-              <div className="text-xs text-slate-500">ROA: {fundamentals?.roa ?? 'N/A'}%</div>
+              <div className="font-num text-base font-semibold text-slate-200">
+                {fundamentals?.roe != null ? `${Number(fundamentals.roe).toFixed(2)}%` : 'N/A'}
+              </div>
+              <div className="text-xs text-slate-500">
+                ROA: {fundamentals?.roa != null ? `${Number(fundamentals.roa).toFixed(2)}%` : 'N/A'}
+              </div>
             </div>
             {foreignNet !== undefined && (
               <div className="glass-card p-3 col-span-2">

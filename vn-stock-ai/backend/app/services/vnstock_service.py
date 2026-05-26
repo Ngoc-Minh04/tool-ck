@@ -122,12 +122,14 @@ def get_stock_info(ticker: str) -> dict:
             "roe": roe_val,
             "roa": roa_val,
             "market_cap": safe_float(overview.get("market_cap")),
+            "foreign_net": get_stock_foreign_net(ticker),
         }
     except BaseException as e:
         logger.error(f"get_stock_info error {ticker}: {e}")
         return {"ticker": ticker.upper(), "company_name": ticker,
                 "industry": "N/A", "pe": None, "pb": None,
-                "eps": None, "roe": None, "roa": None, "market_cap": None}
+                "eps": None, "roe": None, "roa": None, "market_cap": None,
+                "foreign_net": 0.0}
 
 
 def _estimate_index_breadth(index_name: str, change_pct: float) -> dict:
@@ -206,6 +208,38 @@ def get_market_overview() -> list:
     with ThreadPoolExecutor(max_workers=4) as executor:
         result = list(executor.map(fetch_index, indices))
     return result
+
+
+_last_foreign_flow = []
+
+def get_stock_foreign_net(ticker: str) -> float:
+    global _last_foreign_flow
+    ticker_upper = ticker.upper()
+    if _last_foreign_flow:
+        for item in _last_foreign_flow:
+            if item.get("ticker") == ticker_upper:
+                return float(item.get("net_value", 0.0))
+    
+    # Fallback to direct API request
+    try:
+        from vnstock.api.trading import Trading
+        import pandas as pd
+        t = Trading(symbol=ticker_upper, source="VCI", show_log=False)
+        df = t.price_board(symbols_list=[ticker_upper])
+        if df is not None and not df.empty:
+            row = df.iloc[0]
+            buy_val = row.get(('match', 'foreign_buy_value'))
+            sell_val = row.get(('match', 'foreign_sell_value'))
+            
+            def safe_val(v):
+                if v is None or pd.isna(v):
+                    return 0.0
+                return float(v)
+                
+            return safe_val(buy_val) - safe_val(sell_val)
+    except Exception as e:
+        logger.error(f"get_stock_foreign_net error {ticker_upper}: {e}")
+    return 0.0
 
 
 def get_top_movers() -> dict:
