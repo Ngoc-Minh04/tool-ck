@@ -232,6 +232,9 @@ def get_foreign_flow() -> list:
         {"ticker": "CTG", "buy_value": 15.6e9, "sell_value": 54.5e9, "net_value": -38.9e9},
     ]
     
+    cache_lookup = {r["ticker"]: r for r in _last_foreign_flow} if _last_foreign_flow else {}
+    mock_lookup = {r["ticker"]: r for r in mock_fallback}
+    
     def fetch_one(ticker):
         try:
             from vnstock.api.trading import Trading
@@ -255,7 +258,23 @@ def get_foreign_flow() -> list:
                 }
         except BaseException as e:
             logger.warning(f"Failed to fetch foreign flow for {ticker}: {e}")
-        return None
+            
+        # Nếu lỗi tải từ sàn, ưu tiên trả về giá trị đã lưu trong cache
+        if ticker in cache_lookup:
+            return cache_lookup[ticker]
+        # Nếu chưa có trong cache, trả về mock fallback để tránh trả về None
+        if ticker in mock_lookup:
+            mock_copy = mock_lookup[ticker].copy()
+            mock_copy["is_live"] = False
+            return mock_copy
+            
+        return {
+            "ticker": ticker,
+            "buy_value": 0.0,
+            "sell_value": 0.0,
+            "net_value": 0.0,
+            "is_live": False
+        }
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(fetch_one, tickers))
@@ -266,16 +285,12 @@ def get_foreign_flow() -> list:
     has_live_data = len(valid_results) > 0 and sum(abs(r["buy_value"]) + abs(r["sell_value"]) for r in valid_results) > 0
     
     if has_live_data:
-        # Bổ sung các mã bị thiếu với giá trị 0
+        # Bổ sung các mã bị thiếu từ cache hoặc mock
         for ticker in tickers:
             if not any(r["ticker"] == ticker for r in valid_results):
-                valid_results.append({
-                    "ticker": ticker,
-                    "buy_value": 0.0,
-                    "sell_value": 0.0,
-                    "net_value": 0.0,
-                    "is_live": True
-                })
+                fallback_val = cache_lookup.get(ticker, mock_lookup.get(ticker))
+                if fallback_val:
+                    valid_results.append(fallback_val)
         _last_foreign_flow = valid_results
         return valid_results
         
