@@ -286,15 +286,47 @@ export const getForeignTrades = () => {
 /**
  * Mock dữ liệu sector performance
  */
-export const getSectorData = () => {
-  return [
-    { id: 'bank', name: 'Ngân hàng', icon: '🏦', change: (Math.random() - 0.4) * 2, volume: 2.4e9 },
-    { id: 'realestate', name: 'Bất động sản', icon: '🏗️', change: (Math.random() - 0.5) * 3, volume: 1.8e9 },
-    { id: 'steel', name: 'Thép', icon: '⚙️', change: (Math.random() - 0.5) * 2.5, volume: 1.2e9 },
-    { id: 'securities', name: 'Chứng khoán', icon: '📊', change: (Math.random() - 0.45) * 2, volume: 0.9e9 },
-    { id: 'oil_gas', name: 'Dầu khí', icon: '⛽', change: (Math.random() - 0.55) * 1.5, volume: 0.7e9 },
-    { id: 'tech', name: 'Công nghệ', icon: '💻', change: (Math.random() - 0.4) * 1.8, volume: 0.5e9 },
+export const getSectorData = (quotes) => {
+  const mapping = [
+    { id: 'bank', name: 'Ngân hàng', icon: '🏦', tickers: ['VCB', 'BID', 'CTG', 'ACB', 'MBB', 'TCB'] },
+    { id: 'realestate', name: 'Bất động sản', icon: '🏗️', tickers: ['VIC', 'VHM', 'VRE'] },
+    { id: 'steel', name: 'Thép', icon: '⚙️', tickers: ['HPG'] },
+    { id: 'securities', name: 'Chứng khoán', icon: '📊', tickers: ['SSI'] },
+    { id: 'oil_gas', name: 'Dầu khí', icon: '⛽', tickers: ['GAS'] },
+    { id: 'tech', name: 'Công nghệ', icon: '💻', tickers: ['FPT'] },
   ];
+
+  if (!quotes || !quotes.length) {
+    return mapping.map(s => {
+      let baseChange = 0;
+      let baseVol = 1e9;
+      if (s.id === 'bank') { baseChange = -0.53; baseVol = 2.4e9; }
+      else if (s.id === 'realestate') { baseChange = -0.47; baseVol = 1.8e9; }
+      else if (s.id === 'steel') { baseChange = -0.88; baseVol = 1.2e9; }
+      else if (s.id === 'securities') { baseChange = -0.20; baseVol = 0.9e9; }
+      else if (s.id === 'oil_gas') { baseChange = 0.23; baseVol = 0.7e9; }
+      else if (s.id === 'tech') { baseChange = 1.03; baseVol = 0.5e9; }
+      return { ...s, change: baseChange, volume: baseVol };
+    });
+  }
+
+  return mapping.map(s => {
+    const matched = quotes.filter(q => s.tickers.includes(q.ticker));
+    if (!matched.length) {
+      return { ...s, change: 0, volume: 1e9 };
+    }
+    const avgChange = matched.reduce((sum, q) => sum + (q.pct || 0), 0) / matched.length;
+    const totalValueVND = matched.reduce((sum, q) => {
+      const price = q.price || 0;
+      const vol = q.vol || 0;
+      return sum + (price * vol * 1000);
+    }, 0);
+    return {
+      ...s,
+      change: avgChange,
+      volume: totalValueVND || 1e9
+    };
+  });
 };
 
 /**

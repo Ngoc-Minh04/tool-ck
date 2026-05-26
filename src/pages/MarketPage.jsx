@@ -23,11 +23,11 @@ const getPriceColorClass = (price, ceil, floor, ref) => {
 // Sparkline SVG mini chart
 const Sparkline = ({ open, high, low, price, ref: refPrice }) => {
   const pts = [open, low, high, price].filter(Boolean);
-  if (pts.length < 2) return <span className="text-slate-600 text-xs">—</span>;
+  if (pts.length < 2) return <span className="text-slate-600 text-[10px]">—</span>;
   const minV = Math.min(...pts);
   const maxV = Math.max(...pts);
   const range = maxV - minV || 1;
-  const w = 52, h = 22, pad = 2;
+  const w = 48, h = 18, pad = 1.5;
   const xs = [0, 1, 2, 3].map(i => pad + (i / 3) * (w - pad * 2));
   const ys = pts.map(v => h - pad - ((v - minV) / range) * (h - pad * 2));
   const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
@@ -45,8 +45,8 @@ const Sparkline = ({ open, high, low, price, ref: refPrice }) => {
         d={`${d} L${xs[xs.length - 1].toFixed(1)},${h} L${xs[0].toFixed(1)},${h} Z`}
         fill={`url(#sg-${isUp ? 'u' : 'd'})`}
       />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r="2" fill={color} />
+      <path d={d} fill="none" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r="1.5" fill={color} />
     </svg>
   );
 };
@@ -123,7 +123,7 @@ const MarketPage = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 15000); // Tải dữ liệu thật mỗi 15 giây (an toàn cho API)
+    const interval = setInterval(loadData, 20000); // Tải dữ liệu thật mỗi 20 giây (an toàn cho API nhờ gộp nhóm)
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -241,7 +241,7 @@ const MarketPage = () => {
       } catch (err) {
         console.error("Failed to fetch live quotes for FPT/MBB:", err);
       }
-    }, 3000);
+    }, 1500);
 
     return () => clearInterval(timer);
   }, [fetchQuickQuotes]);
@@ -265,21 +265,21 @@ const MarketPage = () => {
     <div className="flex flex-col h-full overflow-hidden">
       <Header title="Thị trường tổng quan" />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 xl:p-5 space-y-4">
         {/* Section: Chỉ số */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-300">📊 Chỉ số thị trường</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold text-slate-300">📊 Chỉ số thị trường</h2>
             <Button variant="ghost" size="sm" onClick={loadData} loading={loading} icon={RefreshCw}>
               Làm mới
             </Button>
           </div>
           {loading && !marketData ? (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
               {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
               {marketData?.indices?.map((index) => (
                 <IndexCard key={index.name} index={index} />
               ))}
@@ -287,172 +287,175 @@ const MarketPage = () => {
           )}
         </div>
 
-        {/* Section: Sectors + Foreign */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {loading && !marketData ? (
-            <><SkeletonCard /><SkeletonCard /></>
-          ) : (
-            <>
-              <SectorSignals sectors={marketData?.sectors || []} />
-              <ForeignTrading data={marketData?.foreign} />
-            </>
-          )}
-        </div>
+        {/* Section: Thân chính chia 2 cột */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          {/* Cột trái: Bảng giá nhanh (8/12 cột) */}
+          <div className="lg:col-span-8 order-1 lg:order-1 glass-card p-4">
+            {/* Header bảng */}
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h3 className="text-xs font-semibold text-slate-200">
+                🗺️ Bảng giá nhanh
+                {isMockData && <span className="ml-2 text-[10px] text-yellow-500 font-normal">(Dữ liệu mẫu)</span>}
+                {pinnedTickers.length > 0 && (
+                  <span className="ml-2 text-[10px] text-amber-400 font-normal">
+                    📌 {pinnedTickers.length} mã đã ghim
+                  </span>
+                )}
+              </h3>
+              {/* Ô tìm kiếm */}
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  id="stock-search"
+                  type="text"
+                  placeholder="Tìm mã cổ phiếu..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-7 pr-7 py-1 text-[11px] rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 w-36 transition-all"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            </div>
 
-        {/* Section: Bảng giá nhanh */}
-        <div className="glass-card p-5">
-          {/* Header bảng */}
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <h3 className="text-sm font-semibold text-slate-200">
-              🗺️ Bảng giá nhanh
-              {isMockData && <span className="ml-2 text-xs text-yellow-500 font-normal">(Dữ liệu mẫu)</span>}
-              {pinnedTickers.length > 0 && (
-                <span className="ml-2 text-xs text-amber-400 font-normal">
-                  📌 {pinnedTickers.length} mã đã ghim
-                </span>
-              )}
-            </h3>
-            {/* Ô tìm kiếm */}
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                id="stock-search"
-                type="text"
-                placeholder="Tìm mã cổ phiếu..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 pr-8 py-1.5 text-xs rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 w-44 transition-all"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                  <X size={12} />
+            {/* Tabs lọc ngành */}
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {SECTORS.map(sector => (
+                <button
+                  key={sector}
+                  onClick={() => setSelectedSector(sector)}
+                  className={`px-2.5 py-0.5 text-[11px] rounded-full font-medium transition-all duration-200 ${
+                    selectedSector === sector
+                      ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                      : 'bg-slate-800/50 text-slate-500 border border-slate-700/50 hover:text-slate-300 hover:border-slate-600'
+                  }`}
+                >
+                  {sector}
                 </button>
-              )}
+              ))}
+            </div>
+
+            {/* Bảng dữ liệu */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(79,195,247,0.1)' }}>
+                    {['', 'Mã', 'Sàn', 'Trần', 'Sàn', 'TC', 'Giá', 'Thay đổi', '%', 'Xu hướng', 'Mở', 'Cao', 'Thấp', 'KL (K)', 'Vốn hóa'].map((h, i) => (
+                      <th key={i} className="text-left py-1.5 px-1.5 text-slate-500 font-medium whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotes.length === 0 ? (
+                    <tr>
+                      <td colSpan={15} className="py-6 text-center text-slate-500 text-[11px]">
+                        Không tìm thấy mã nào phù hợp
+                      </td>
+                    </tr>
+                  ) : (
+                    quotes.map((row) => {
+                      const isPinned = pinnedTickers.includes(row.ticker);
+                      const priceColorClass = getPriceColorClass(row.price, row.ceil, row.floor, row.ref);
+                      return (
+                        <tr
+                          key={row.ticker}
+                          className="group"
+                          style={{
+                            borderBottom: '1px solid rgba(79,195,247,0.04)',
+                            background: flashStates[row.ticker] === 'up'
+                              ? 'rgba(74, 222, 128, 0.15)'
+                              : flashStates[row.ticker] === 'down'
+                              ? 'rgba(248, 113, 113, 0.15)'
+                              : isPinned
+                              ? 'rgba(251, 191, 36, 0.03)'
+                              : 'transparent',
+                            transition: 'background-color 0.4s ease-out',
+                          }}
+                          onMouseEnter={e => {
+                            if (flashStates[row.ticker]) return;
+                            e.currentTarget.style.background = isPinned ? 'rgba(251,191,36,0.06)' : 'rgba(79,195,247,0.04)';
+                          }}
+                          onMouseLeave={e => {
+                            if (flashStates[row.ticker]) return;
+                            e.currentTarget.style.background = isPinned ? 'rgba(251,191,36,0.03)' : 'transparent';
+                          }}
+                        >
+                          {/* Pin Button */}
+                          <td className="py-1 px-1.5 w-6">
+                            <button
+                              id={`pin-${row.ticker}`}
+                              title={isPinned ? 'Bỏ ghim' : 'Ghim lên đầu'}
+                              onClick={() => togglePin(row.ticker)}
+                              className={`transition-all duration-200 rounded p-0.5 ${
+                                isPinned
+                                  ? 'text-amber-400 hover:text-amber-300'
+                                  : 'text-slate-700 hover:text-amber-400 opacity-0 group-hover:opacity-100'
+                              }`}
+                            >
+                              {isPinned ? <Pin size={10} fill="currentColor" /> : <Pin size={10} />}
+                            </button>
+                          </td>
+                          {/* Mã */}
+                          <td className="py-1 px-1.5 font-bold text-slate-200 whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              {isPinned && <span className="text-amber-400 text-xs leading-none">│</span>}
+                              {row.ticker}
+                            </div>
+                          </td>
+                          <td className="py-1 px-1.5 text-slate-500">{row.exchange}</td>
+                          <td className="py-1 px-1.5 font-num text-fuchsia-400">{row.ceil ? row.ceil.toLocaleString('vi-VN') : '-'}</td>
+                          <td className="py-1 px-1.5 font-num text-cyan-400">{row.floor ? row.floor.toLocaleString('vi-VN') : '-'}</td>
+                          <td className="py-1 px-1.5 font-num text-yellow-400">{row.ref ? row.ref.toLocaleString('vi-VN') : '-'}</td>
+                          <td className={`py-1 px-1.5 font-num ${priceColorClass}`}>{row.price.toLocaleString('vi-VN')}</td>
+                          <td className={`py-1 px-1.5 font-num ${row.change > 0 ? 'text-green-400' : row.change < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                            {row.change > 0 ? '+' : ''}{row.change.toLocaleString('vi-VN')}
+                          </td>
+                          <td className={`py-1 px-1.5 font-num font-bold ${row.pct > 0 ? 'text-green-400' : row.pct < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                            {row.pct > 0 ? '+' : ''}{row.pct}%
+                          </td>
+                          {/* Sparkline */}
+                          <td className="py-1 px-1.5">
+                            <Sparkline open={row.open} high={row.high} low={row.low} price={row.price} ref={row.ref} />
+                          </td>
+                          <td className={`py-1 px-1.5 font-num ${getPriceColorClass(row.open, row.ceil, row.floor, row.ref)}`}>
+                            {row.open ? row.open.toLocaleString('vi-VN') : '-'}
+                          </td>
+                          <td className={`py-1 px-1.5 font-num ${getPriceColorClass(row.high, row.ceil, row.floor, row.ref)}`}>
+                            {row.high ? row.high.toLocaleString('vi-VN') : '-'}
+                          </td>
+                          <td className={`py-1 px-1.5 font-num ${getPriceColorClass(row.low, row.ceil, row.floor, row.ref)}`}>
+                            {row.low ? row.low.toLocaleString('vi-VN') : '-'}
+                          </td>
+                          <td className="py-1 px-1.5 font-num text-cyan-400">{row.vol.toLocaleString('vi-VN')}</td>
+                          <td className="py-1 px-1.5 font-num text-slate-400">{row.cap}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer: Thông tin tóm tắt */}
+            <div className="mt-2.5 pt-2.5 flex items-center justify-between text-[10px] text-slate-600" style={{ borderTop: '1px solid rgba(79,195,247,0.06)' }}>
+              <span>{quotes.length} mã đang hiển thị</span>
+              <span>Cập nhật mỗi 15 giây · Nguồn: VCI</span>
             </div>
           </div>
 
-          {/* Tabs lọc ngành */}
-          <div className="flex gap-1.5 mb-4 flex-wrap">
-            {SECTORS.map(sector => (
-              <button
-                key={sector}
-                onClick={() => setSelectedSector(sector)}
-                className={`px-2.5 py-1 text-xs rounded-full font-medium transition-all duration-200 ${
-                  selectedSector === sector
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-                    : 'bg-slate-800/50 text-slate-500 border border-slate-700/50 hover:text-slate-300 hover:border-slate-600'
-                }`}
-              >
-                {sector}
-              </button>
-            ))}
-          </div>
-
-          {/* Bảng dữ liệu */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(79,195,247,0.1)' }}>
-                  {['', 'Mã', 'Sàn', 'Trần', 'Sàn', 'TC', 'Giá', 'Thay đổi', '%', 'Xu hướng', 'Mở', 'Cao', 'Thấp', 'KL (K)', 'Vốn hóa'].map((h, i) => (
-                    <th key={i} className="text-left py-2 px-2 text-slate-500 font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {quotes.length === 0 ? (
-                  <tr>
-                    <td colSpan={15} className="py-8 text-center text-slate-500 text-xs">
-                      Không tìm thấy mã nào phù hợp
-                    </td>
-                  </tr>
-                ) : (
-                  quotes.map((row) => {
-                    const isPinned = pinnedTickers.includes(row.ticker);
-                    const priceColorClass = getPriceColorClass(row.price, row.ceil, row.floor, row.ref);
-                    return (
-                      <tr
-                        key={row.ticker}
-                        className="group"
-                        style={{
-                          borderBottom: '1px solid rgba(79,195,247,0.04)',
-                          background: flashStates[row.ticker] === 'up'
-                            ? 'rgba(74, 222, 128, 0.15)'
-                            : flashStates[row.ticker] === 'down'
-                            ? 'rgba(248, 113, 113, 0.15)'
-                            : isPinned
-                            ? 'rgba(251, 191, 36, 0.03)'
-                            : 'transparent',
-                          transition: 'background-color 0.4s ease-out',
-                        }}
-                        onMouseEnter={e => {
-                          if (flashStates[row.ticker]) return;
-                          e.currentTarget.style.background = isPinned ? 'rgba(251,191,36,0.06)' : 'rgba(79,195,247,0.04)';
-                        }}
-                        onMouseLeave={e => {
-                          if (flashStates[row.ticker]) return;
-                          e.currentTarget.style.background = isPinned ? 'rgba(251,191,36,0.03)' : 'transparent';
-                        }}
-                      >
-                        {/* Pin Button */}
-                        <td className="py-1.5 px-2 w-6">
-                          <button
-                            id={`pin-${row.ticker}`}
-                            title={isPinned ? 'Bỏ ghim' : 'Ghim lên đầu'}
-                            onClick={() => togglePin(row.ticker)}
-                            className={`transition-all duration-200 rounded p-0.5 ${
-                              isPinned
-                                ? 'text-amber-400 hover:text-amber-300'
-                                : 'text-slate-700 hover:text-amber-400 opacity-0 group-hover:opacity-100'
-                            }`}
-                          >
-                            {isPinned ? <Pin size={11} fill="currentColor" /> : <Pin size={11} />}
-                          </button>
-                        </td>
-                        {/* Mã */}
-                        <td className="py-1.5 px-2 font-bold text-slate-200 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            {isPinned && <span className="text-amber-400 text-xs leading-none">│</span>}
-                            {row.ticker}
-                          </div>
-                        </td>
-                        <td className="py-1.5 px-2 text-slate-500">{row.exchange}</td>
-                        <td className="py-1.5 px-2 font-num text-fuchsia-400">{row.ceil ? row.ceil.toLocaleString('vi-VN') : '-'}</td>
-                        <td className="py-1.5 px-2 font-num text-cyan-400">{row.floor ? row.floor.toLocaleString('vi-VN') : '-'}</td>
-                        <td className="py-1.5 px-2 font-num text-yellow-400">{row.ref ? row.ref.toLocaleString('vi-VN') : '-'}</td>
-                        <td className={`py-1.5 px-2 font-num ${priceColorClass}`}>{row.price.toLocaleString('vi-VN')}</td>
-                        <td className={`py-1.5 px-2 font-num ${row.change > 0 ? 'text-green-400' : row.change < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                          {row.change > 0 ? '+' : ''}{row.change.toLocaleString('vi-VN')}
-                        </td>
-                        <td className={`py-1.5 px-2 font-num font-bold ${row.pct > 0 ? 'text-green-400' : row.pct < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                          {row.pct > 0 ? '+' : ''}{row.pct}%
-                        </td>
-                        {/* Sparkline */}
-                        <td className="py-1.5 px-2">
-                          <Sparkline open={row.open} high={row.high} low={row.low} price={row.price} ref={row.ref} />
-                        </td>
-                        <td className={`py-1.5 px-2 font-num ${getPriceColorClass(row.open, row.ceil, row.floor, row.ref)}`}>
-                          {row.open ? row.open.toLocaleString('vi-VN') : '-'}
-                        </td>
-                        <td className={`py-1.5 px-2 font-num ${getPriceColorClass(row.high, row.ceil, row.floor, row.ref)}`}>
-                          {row.high ? row.high.toLocaleString('vi-VN') : '-'}
-                        </td>
-                        <td className={`py-1.5 px-2 font-num ${getPriceColorClass(row.low, row.ceil, row.floor, row.ref)}`}>
-                          {row.low ? row.low.toLocaleString('vi-VN') : '-'}
-                        </td>
-                        <td className="py-1.5 px-2 font-num text-cyan-400">{row.vol.toLocaleString('vi-VN')}</td>
-                        <td className="py-1.5 px-2 font-num text-slate-400">{row.cap}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer: Thông tin tóm tắt */}
-          <div className="mt-3 pt-3 flex items-center justify-between text-xs text-slate-600" style={{ borderTop: '1px solid rgba(79,195,247,0.06)' }}>
-            <span>{quotes.length} mã đang hiển thị</span>
-            <span>Cập nhật mỗi 15 giây · Nguồn: VCI</span>
+          {/* Cột phải: Phân ngành & Khối ngoại (4/12 cột) */}
+          <div className="lg:col-span-4 order-2 lg:order-2 space-y-4">
+            {loading && !marketData ? (
+              <><SkeletonCard /><SkeletonCard /></>
+            ) : (
+              <>
+                <SectorSignals sectors={marketData?.sectors || []} />
+                <ForeignTrading data={marketData?.foreign} />
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -97,7 +97,7 @@ const useVnStock = () => {
       return {
         indices: parsedIndices,
         foreign: parsedForeign,
-        sectors: getSectorData(),
+        sectors: getSectorData(quickQuotesData),
         quickQuotes: quickQuotesData || [],
         isOffline: false,
       };

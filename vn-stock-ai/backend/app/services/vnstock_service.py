@@ -175,7 +175,8 @@ def get_market_overview() -> list:
     def fetch_index(idx):
         try:
             from vnstock.api.quote import Quote
-            q = Quote(symbol=idx, source="VCI")
+            query_symbol = "UPCOMINDEX" if idx == "UPCOM" else idx
+            q = Quote(symbol=query_symbol, source="VCI")
             end = date.today().strftime("%Y-%m-%d")
             start = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
             df = q.history(start=start, end=end, interval="1D")
@@ -208,14 +209,7 @@ def get_market_overview() -> list:
 
 
 def get_top_movers() -> dict:
-    # Trực tiếp sử dụng mock data để tăng tốc độ tải và tránh bị rate limit API bởi vnstock
-    return _mock_movers()
-
-
-_last_foreign_flow = []
-
-def get_foreign_flow() -> list:
-    from concurrent.futures import ThreadPoolExecutor
+    # Trực tiếp sử dụng mock data để tăng tốc đdef get_foreign_flow() -> list:
     import pandas as pd
     global _last_foreign_flow
     
@@ -235,70 +229,64 @@ def get_foreign_flow() -> list:
     cache_lookup = {r["ticker"]: r for r in _last_foreign_flow} if _last_foreign_flow else {}
     mock_lookup = {r["ticker"]: r for r in mock_fallback}
     
-    def fetch_one(ticker):
-        try:
-            from vnstock.api.trading import Trading
-            t = Trading(symbol=ticker, source="VCI")
-            df = t.price_board()
-            if df is not None and not df.empty:
-                row = df.iloc[0]
+    results = []
+    try:
+        from vnstock.api.trading import Trading
+        t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+        df = t.price_board(symbols_list=tickers)
+        if df is not None and not df.empty:
+            for idx_row, row in df.iterrows():
+                ticker = row.get(('listing', 'symbol'))
+                if not ticker or pd.isna(ticker):
+                    continue
+                ticker = str(ticker).upper()
+                
                 def safe_val(v, default=0.0):
                     if v is None or pd.isna(v):
                         return default
                     return float(v)
+                    
                 buy_val = safe_val(row.get(('match', 'foreign_buy_value')), 0.0)
                 sell_val = safe_val(row.get(('match', 'foreign_sell_value')), 0.0)
                 net_val = buy_val - sell_val
-                return {
+                results.append({
                     "ticker": ticker,
                     "buy_value": buy_val,
                     "sell_value": sell_val,
                     "net_value": net_val,
                     "is_live": True
-                }
-        except BaseException as e:
-            logger.warning(f"Failed to fetch foreign flow for {ticker}: {e}")
-            
-        # Nếu lỗi tải từ sàn, ưu tiên trả về giá trị đã lưu trong cache
-        if ticker in cache_lookup:
-            return cache_lookup[ticker]
-        # Nếu chưa có trong cache, trả về mock fallback để tránh trả về None
-        if ticker in mock_lookup:
-            mock_copy = mock_lookup[ticker].copy()
-            mock_copy["is_live"] = False
-            return mock_copy
-            
-        return {
-            "ticker": ticker,
-            "buy_value": 0.0,
-            "sell_value": 0.0,
-            "net_value": 0.0,
-            "is_live": False
-        }
+                })
+    except BaseException as e:
+        logger.warning(f"Failed to fetch foreign flow batch: {e}")
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(executor.map(fetch_one, tickers))
-    
-    valid_results = [r for r in results if r is not None]
-    
+    # Điền bổ sung các mã lỗi/thiếu bằng cache hoặc mock
+    fetched_tickers = {r["ticker"] for r in results}
+    for ticker in tickers:
+        if ticker not in fetched_tickers:
+            if ticker in cache_lookup:
+                results.append(cache_lookup[ticker])
+            elif ticker in mock_lookup:
+                mock_copy = mock_lookup[ticker].copy()
+                mock_copy["is_live"] = False
+                results.append(mock_copy)
+            else:
+                results.append({
+                    "ticker": ticker,
+                    "buy_value": 0.0,
+                    "sell_value": 0.0,
+                    "net_value": 0.0,
+                    "is_live": False
+                })
+
     # Kiểm tra xem có dữ liệu giao dịch thực tế không (tổng giá trị mua/bán > 0)
-    has_live_data = len(valid_results) > 0 and sum(abs(r["buy_value"]) + abs(r["sell_value"]) for r in valid_results) > 0
-    
+    has_live_data = len(results) > 0 and sum(abs(r["buy_value"]) + abs(r["sell_value"]) for r in results) > 0
     if has_live_data:
-        # Bổ sung các mã bị thiếu từ cache hoặc mock
-        for ticker in tickers:
-            if not any(r["ticker"] == ticker for r in valid_results):
-                fallback_val = cache_lookup.get(ticker, mock_lookup.get(ticker))
-                if fallback_val:
-                    valid_results.append(fallback_val)
-        _last_foreign_flow = valid_results
-        return valid_results
+        _last_foreign_flow = results
+        return results
         
-    # Nếu API lỗi hoặc ngoài giờ giao dịch (chưa có số liệu mới), dùng lại dữ liệu thật gần nhất trong cache
     if _last_foreign_flow:
         return _last_foreign_flow
         
-    # Mặc định trả về dữ liệu mẫu nếu chưa có dữ liệu thật nào được lưu
     return mock_fallback
 
 
@@ -420,7 +408,6 @@ def _mock_foreign_flow() -> list:
 _last_live_quotes = {}
 
 def get_quick_quotes(ticker_list: list = None) -> list:
-    from concurrent.futures import ThreadPoolExecutor
     import pandas as pd
     
     default_tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
@@ -443,15 +430,18 @@ def get_quick_quotes(ticker_list: list = None) -> list:
         'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.00, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
         'VRE': { 'ticker': 'VRE', 'exchange': 'HOSE', 'price': 22500.0, 'change': 300.0, 'pct': 1.35, 'vol': 1950, 'cap': '51T', 'ref': 22200.0, 'ceil': 23750.0, 'floor': 20650.0, 'high': 22700.0, 'low': 22150.0, 'open': 22200.0 },
     }
-
-    def fetch_one(ticker):
-        try:
-            from vnstock.api.trading import Trading
-            t = Trading(symbol=ticker, source="VCI")
-            df = t.price_board()
-            
-            if df is not None and not df.empty:
-                row = df.iloc[0]
+    
+    results = []
+    try:
+        from vnstock.api.trading import Trading
+        t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+        df = t.price_board(symbols_list=tickers)
+        if df is not None and not df.empty:
+            for idx_row, row in df.iterrows():
+                ticker = row.get(('listing', 'symbol'))
+                if not ticker or pd.isna(ticker):
+                    continue
+                ticker = str(ticker).upper()
                 
                 def safe_val(v, default=0.0):
                     if v is None or pd.isna(v):
@@ -461,7 +451,6 @@ def get_quick_quotes(ticker_list: list = None) -> list:
                 price = safe_val(row.get(('match', 'match_price')))
                 ref_price = safe_val(row.get(('listing', 'ref_price')))
                 
-                # Nếu chưa có giá khớp trong ngày (trước phiên hoặc đầu ATO), dùng giá tham chiếu
                 if price <= 0:
                     price = ref_price
                     
@@ -472,7 +461,6 @@ def get_quick_quotes(ticker_list: list = None) -> list:
                 low_price = safe_val(row.get(('match', 'lowest')), price)
                 volume = int(safe_val(row.get(('match', 'accumulated_volume')), 0.0))
                 
-                # Quy đổi về VNĐ nếu API trả về dạng đơn vị nghìn đồng
                 if price < 1000:
                     price *= 1000
                     ref_price *= 1000
@@ -502,34 +490,34 @@ def get_quick_quotes(ticker_list: list = None) -> list:
                     "is_live": True
                 }
                 _last_live_quotes[ticker] = res
-                return res
-        except BaseException as e:
-            logger.warning(f"Failed to fetch live quote for {ticker}: {e}")
-            
-        if ticker in _last_live_quotes:
-            return _last_live_quotes[ticker]
-            
-        fb = fallbacks.get(ticker, {
-            "ticker": ticker,
-            "exchange": "HOSE",
-            "price": 0.0,
-            "change": 0.0,
-            "pct": 0.0,
-            "vol": 0,
-            "cap": "N/A",
-            "ref": 0.0,
-            "ceil": 0.0,
-            "floor": 0.0,
-            "high": 0.0,
-            "low": 0.0,
-            "open": 0.0
-        })
-        fb_copy = fb.copy()
-        fb_copy["is_live"] = False
-        return fb_copy
+                results.append(res)
+    except BaseException as e:
+        logger.warning(f"Failed to fetch live quotes batch: {e}")
 
-    # Sử dụng 8 workers để tối ưu hóa tải song song bảng giá thực tế từ sàn
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(executor.map(fetch_one, tickers))
-        
+    # Điền bổ sung các mã bị thiếu hoặc lỗi bằng cache hoặc mock
+    fetched_tickers = {r["ticker"] for r in results}
+    for ticker in tickers:
+        if ticker not in fetched_tickers:
+            if ticker in _last_live_quotes:
+                results.append(_last_live_quotes[ticker])
+            else:
+                fb = fallbacks.get(ticker, {
+                    "ticker": ticker,
+                    "exchange": "HOSE",
+                    "price": 0.0,
+                    "change": 0.0,
+                    "pct": 0.0,
+                    "vol": 0,
+                    "cap": "N/A",
+                    "ref": 0.0,
+                    "ceil": 0.0,
+                    "floor": 0.0,
+                    "high": 0.0,
+                    "low": 0.0,
+                    "open": 0.0
+                })
+                fb_copy = fb.copy()
+                fb_copy["is_live"] = False
+                results.append(fb_copy)
+                
     return results

@@ -18,43 +18,41 @@ const IndexCard = ({ index }) => {
 
   return (
     <div
-      className="glass-card-hover p-4 space-y-3"
+      className="glass-card-hover p-3 flex items-center justify-between gap-4"
       style={{ borderLeft: `3px solid ${color}` }}
     >
-      {/* Name & Change */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-slate-200">{name}</span>
-        <span
-          className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded"
-          style={{ background: `${color}15`, color }}
-        >
-          <Icon size={12} />
-          {isUp ? '+' : ''}{pct}%
-        </span>
-      </div>
-
-      {/* Value */}
-      <div className="font-num text-2xl font-bold" style={{ color, fontFamily: "'JetBrains Mono', monospace" }}>
-        {parseFloat(value).toFixed(2)}
-      </div>
-
-      {/* Advance/Decline bar */}
+      {/* Left Column: Name & Value & Change */}
       <div className="space-y-1">
-        <div className="flex rounded-full overflow-hidden h-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">{name}</span>
+          <span
+            className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap"
+            style={{ background: `${color}15`, color }}
+          >
+            <Icon size={10} className="stroke-[3]" />
+            {isUp ? '+' : ''}{pct}%
+          </span>
+        </div>
+        <div className="font-num text-lg font-extrabold tracking-tight leading-none" style={{ color, fontFamily: "'JetBrains Mono', monospace" }}>
+          {parseFloat(value).toFixed(2)}
+        </div>
+      </div>
+
+      {/* Right Column: Advance/Decline bar & Volume */}
+      <div className="flex-1 max-w-[130px] space-y-1 text-right">
+        <div className="flex rounded-full overflow-hidden h-1 bg-slate-800/80">
           <div style={{ width: `${advancePct}%`, background: '#00e676' }} />
           <div style={{ width: `${100 - advancePct - declinePct}%`, background: '#94a3b8' }} />
           <div style={{ width: `${declinePct}%`, background: '#ff5252' }} />
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-green-400">↑ {advance}</span>
-          <span className="text-slate-500">= {unchanged}</span>
-          <span className="text-red-400">↓ {decline}</span>
+        <div className="flex justify-between text-[10px] font-medium">
+          <span className="text-green-400">↑{advance}</span>
+          <span className="text-slate-500">={unchanged}</span>
+          <span className="text-red-400">↓{decline}</span>
         </div>
-      </div>
-
-      {/* Volume */}
-      <div className="text-xs text-slate-500">
-        KL: <span className="font-num text-cyan-400">{(volume / 1e6).toFixed(0)}M</span>
+        <div className="text-[10px] text-slate-500">
+          KL: <span className="font-num text-cyan-400">{(volume / 1e6).toFixed(0)}M</span>
+        </div>
       </div>
     </div>
   );
