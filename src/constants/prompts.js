@@ -51,7 +51,7 @@ Liệt kê các rủi ro chính và mức độ
 ⚠️ **Lưu ý**: Phân tích trên chỉ mang tính chất tham khảo, không phải lời khuyên đầu tư chính thức. Quyết định đầu tư là hoàn toàn trách nhiệm của nhà đầu tư.`;
 
 // ===== PROMPT TẠO PHÂN TÍCH MÃ CK =====
-export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, additionalContext = '' }) => {
+export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, info, technicals, additionalContext = '' }) => {
   const timeframeMap = {
     T1: '1 ngày tới (T+1)',
     T3: '3 ngày tới (T+3)',
@@ -62,13 +62,38 @@ export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, addi
 
   const activeSources = sources.filter(s => s.enabled).map(s => s.name).join(', ');
 
+  let liveDataPrompt = '';
+  if (info && technicals) {
+    liveDataPrompt = `
+DỮ LIỆU THỰC TẾ HIỆN TẠI CỦA CỔ PHIẾU (Bắt buộc phải sử dụng số liệu này):
+- **Giá hiện tại**: ${info.currentPrice?.toLocaleString('vi-VN')} VND
+- **Thay đổi hôm nay**: ${info.change >= 0 ? '+' : ''}${(info.change * 100).toFixed(2)}%
+- **Khối lượng**: ${(info.volume / 1e6).toFixed(1)}M cổ phiếu
+- **Chỉ số cơ bản**:
+  - P/E: ${info.fundamentals?.pe ?? 'N/A'}x
+  - P/B: ${info.fundamentals?.pb ?? 'N/A'}x
+  - ROE: ${info.fundamentals?.roe ?? 'N/A'}%
+  - ROA: ${info.fundamentals?.roa ?? 'N/A'}%
+  - EPS: ${info.fundamentals?.eps?.toLocaleString('vi-VN') ?? 'N/A'} VND
+  - Vốn hóa: ${info.fundamentals?.marketCap ? (info.fundamentals.marketCap / 1e12).toFixed(1) + 'T' : 'N/A'}
+- **Chỉ báo kỹ thuật**:
+  - RSI (14): ${technicals.rsi ? technicals.rsi.toFixed(1) : 'N/A'}
+  - MA20: ${technicals.ma20 ? Math.round(technicals.ma20).toLocaleString('vi-VN') : 'N/A'} VND
+  - MA50: ${technicals.ma50 ? Math.round(technicals.ma50).toLocaleString('vi-VN') : 'N/A'} VND
+  - MA200: ${technicals.ma200 ? Math.round(technicals.ma200).toLocaleString('vi-VN') : 'N/A'} VND
+  - Xu hướng MA: ${technicals.trend === 'uptrend' ? 'Tăng giá (Uptrend)' : technicals.trend === 'downtrend' ? 'Giảm giá (Downtrend)' : 'Đi ngang (Sideways)'}
+  - Bollinger Bands: Dải trên ${technicals.bb_upper ? Math.round(technicals.bb_upper).toLocaleString('vi-VN') : 'N/A'} VND, Dải dưới ${technicals.bb_lower ? Math.round(technicals.bb_lower).toLocaleString('vi-VN') : 'N/A'} VND, Trung tâm ${technicals.bb_mid ? Math.round(technicals.bb_mid).toLocaleString('vi-VN') : 'N/A'} VND
+  - MACD: ${technicals.macd ? technicals.macd.toFixed(2) : 'N/A'} (Signal: ${technicals.macd_signal ? technicals.macd_signal.toFixed(2) : 'N/A'}, Histogram: ${technicals.macd_hist ? technicals.macd_hist.toFixed(2) : 'N/A'})
+`;
+  }
+
   return `Phân tích toàn diện cổ phiếu **${ticker}** trên sàn **${exchange}** cho khung thời gian **${timeframeMap[timeframe] || timeframe}**.
 
 Nguồn tham chiếu ưu tiên: ${activeSources}
-
+${liveDataPrompt}
 ${additionalContext ? `Thông tin bổ sung từ người dùng: ${additionalContext}` : ''}
 
-Hãy đưa ra phân tích chi tiết theo cấu trúc chuẩn, bao gồm tín hiệu BUY/HOLD/SELL rõ ràng với vùng giá cụ thể và xác suất thành công.`;
+Hãy đưa ra phân tích chi tiết theo cấu trúc chuẩn. Bạn phải sử dụng chính xác các số liệu thực tế ở trên để viết phân tích (đặc biệt là giá hiện tại, các đường MA và các chỉ số tài chính), tuyệt đối không tự bịa ra giá hoặc dùng giá cũ trong dữ liệu huấn luyện của bạn.`;
 };
 
 // ===== QUICK PROMPTS CHO CHAT =====

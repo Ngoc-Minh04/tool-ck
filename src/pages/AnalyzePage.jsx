@@ -128,9 +128,16 @@ const AnalyzePage = () => {
     setResult(null);
     setCompareAnalyzed(false);
 
-    await stock1.fetchAll(ticker, chartPeriod);
+    const liveData = await stock1.fetchAll(ticker, chartPeriod);
 
-    const prompt = buildAnalysisPrompt({ ticker, exchange, timeframe, sources });
+    const prompt = buildAnalysisPrompt({
+      ticker,
+      exchange,
+      timeframe,
+      sources,
+      info: liveData?.info,
+      technicals: liveData?.technicals
+    });
     const aiResult = await analyze({
       systemPrompt: STOCK_ANALYST_SYSTEM_PROMPT,
       userPrompt: prompt,

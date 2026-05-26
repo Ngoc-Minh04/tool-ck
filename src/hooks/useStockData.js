@@ -30,9 +30,7 @@ export function useStockData() {
     const pivots = compute_indicators_client.pivotPoints(lastH, lastL, lastC);
     const currentPrice = closes[closes.length - 1];
 
-    setOhlcv(mockData);
-    setIsOffline(true);
-    setTechnicals({
+    const techObj = {
       close: currentPrice,
       rsi: compute_indicators_client.rsi(closes),
       ma20: compute_indicators_client.ma(closes, 20),
@@ -47,8 +45,9 @@ export function useStockData() {
       macd: null, macd_signal: null, macd_hist: null,
       bb_upper: null, bb_lower: null, bb_mid: null,
       volume_avg20: null, atr: null,
-    });
-    setInfo({
+    };
+
+    const infoObj = {
       ticker: ticker.toUpperCase(),
       company_name: ticker.toUpperCase() + ' Corp',
       industry: 'Chưa xác định (Offline)',
@@ -64,7 +63,12 @@ export function useStockData() {
         marketCap: null,
       },
       foreignNet: 0,
-    });
+    };
+
+    setOhlcv(mockData);
+    setIsOffline(true);
+    setTechnicals(techObj);
+    setInfo(infoObj);
     setSr({
       current_price: currentPrice,
       pivot_points: { pivot: pivots.PP, r1: pivots.R1, r2: pivots.R2, s1: pivots.S1, s2: pivots.S2 },
@@ -73,6 +77,7 @@ export function useStockData() {
       swing_highs: [], swing_lows: [], volume_zones: [],
     });
     setNews([]);
+    return { info: infoObj, technicals: techObj };
   };
 
   const fetchAll = useCallback(async (ticker, period = '3mo') => {
@@ -97,7 +102,7 @@ export function useStockData() {
         const change = prevBar.close ? (lastBar.close - prevBar.close) / prevBar.close : 0;
         const volume = lastBar.volume || 0;
 
-        setInfo({
+        const infoObj = {
           ticker: ticker.toUpperCase(),
           company_name: fullData.info?.company_name || ticker.toUpperCase(),
           industry: fullData.info?.industry || 'N/A',
@@ -113,23 +118,25 @@ export function useStockData() {
             marketCap: fullData.info?.market_cap,
           },
           foreignNet: 0,
-        });
+        };
+
+        setInfo(infoObj);
         setTechnicals(fullData.technicals || null);
         setSr(srData || null);
         setNews(newsData || []);
         setIsOffline(false);
-        return fullData;
+        return { info: infoObj, technicals: fullData.technicals || null };
       } else {
         // Backend offline → fallback sang mock data
-        _loadMockData(ticker, period);
+        const mockRes = _loadMockData(ticker, period);
         toast('Backend offline — đang dùng dữ liệu mô phỏng', { icon: '⚠️', id: 'backend-warn' });
-        return null;
+        return mockRes;
       }
     } catch (err) {
       setBackendOk(false);
-      _loadMockData(ticker, period);
+      const mockRes = _loadMockData(ticker, period);
       toast('Dùng mock data (backend chưa chạy)', { icon: '⚠️', id: 'backend-warn' });
-      return null;
+      return mockRes;
     } finally {
       setLoading(false);
     }
