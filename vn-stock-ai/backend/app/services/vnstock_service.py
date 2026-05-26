@@ -170,12 +170,79 @@ def get_top_movers() -> dict:
     return _mock_movers()
 
 
+_last_foreign_flow = []
+
 def get_foreign_flow() -> list:
-    try:
-        return _mock_foreign_flow()
-    except BaseException as e:
-        logger.error(f"get_foreign_flow error: {e}")
-        return []
+    from concurrent.futures import ThreadPoolExecutor
+    import pandas as pd
+    global _last_foreign_flow
+    
+    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
+    
+    mock_fallback = [
+        {"ticker": "VCB", "buy_value": 85.4e9, "sell_value": 12.1e9, "net_value": 73.3e9},
+        {"ticker": "FPT", "buy_value": 62.1e9, "sell_value": 8.5e9, "net_value": 53.6e9},
+        {"ticker": "ACB", "buy_value": 48.7e9, "sell_value": 15.2e9, "net_value": 33.5e9},
+        {"ticker": "HPG", "buy_value": 22.3e9, "sell_value": 94.6e9, "net_value": -72.3e9},
+        {"ticker": "SSI", "buy_value": 18.9e9, "sell_value": 74.5e9, "net_value": -55.6e9},
+        {"ticker": "VHM", "buy_value": 31.2e9, "sell_value": 74.3e9, "net_value": -43.1e9},
+        {"ticker": "MBB", "buy_value": 35.8e9, "sell_value": 5.2e9, "net_value": 30.6e9},
+        {"ticker": "CTG", "buy_value": 15.6e9, "sell_value": 54.5e9, "net_value": -38.9e9},
+    ]
+    
+    def fetch_one(ticker):
+        try:
+            from vnstock.api.trading import Trading
+            t = Trading(symbol=ticker, source="VCI")
+            df = t.price_board()
+            if df is not None and not df.empty:
+                row = df.iloc[0]
+                def safe_val(v, default=0.0):
+                    if v is None or pd.isna(v):
+                        return default
+                    return float(v)
+                buy_val = safe_val(row.get(('match', 'foreign_buy_value')), 0.0)
+                sell_val = safe_val(row.get(('match', 'foreign_sell_value')), 0.0)
+                net_val = buy_val - sell_val
+                return {
+                    "ticker": ticker,
+                    "buy_value": buy_val,
+                    "sell_value": sell_val,
+                    "net_value": net_val,
+                    "is_live": True
+                }
+        except BaseException as e:
+            logger.warning(f"Failed to fetch foreign flow for {ticker}: {e}")
+        return None
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(fetch_one, tickers))
+    
+    valid_results = [r for r in results if r is not None]
+    
+    # Kiểm tra xem có dữ liệu giao dịch thực tế không (tổng giá trị mua/bán > 0)
+    has_live_data = len(valid_results) > 0 and sum(abs(r["buy_value"]) + abs(r["sell_value"]) for r in valid_results) > 0
+    
+    if has_live_data:
+        # Bổ sung các mã bị thiếu với giá trị 0
+        for ticker in tickers:
+            if not any(r["ticker"] == ticker for r in valid_results):
+                valid_results.append({
+                    "ticker": ticker,
+                    "buy_value": 0.0,
+                    "sell_value": 0.0,
+                    "net_value": 0.0,
+                    "is_live": True
+                })
+        _last_foreign_flow = valid_results
+        return valid_results
+        
+    # Nếu API lỗi hoặc ngoài giờ giao dịch (chưa có số liệu mới), dùng lại dữ liệu thật gần nhất trong cache
+    if _last_foreign_flow:
+        return _last_foreign_flow
+        
+    # Mặc định trả về dữ liệu mẫu nếu chưa có dữ liệu thật nào được lưu
+    return mock_fallback
 
 
 def get_screener(exchange: str = "HOSE", min_pe: float = None, max_pe: float = None,
