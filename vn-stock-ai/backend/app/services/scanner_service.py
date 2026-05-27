@@ -6,6 +6,7 @@ Thiết kế tiết kiệm request: chỉ 1 batch request/lần quét, cache 5 p
 import time
 import json
 import os
+import tempfile
 from loguru import logger
 from datetime import date, timedelta
 
@@ -43,6 +44,32 @@ _scan_cache = {
 _ohlcv_cache = {}  # ticker -> list[dict]
 _ohlcv_loaded_date = None
 
+OHLCV_CACHE_FILE = os.path.join(tempfile.gettempdir(), "scanner_ohlcv_cache.json")
+
+def _write_ohlcv_cache(data, loaded_date: str):
+    try:
+        payload = {
+            "loaded_date": loaded_date,
+            "ohlcv": data
+        }
+        with open(OHLCV_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[Scanner] Write OHLCV cache error: {e}")
+
+def _read_ohlcv_cache():
+    if not os.path.exists(OHLCV_CACHE_FILE):
+        return None, {}
+    try:
+        with open(OHLCV_CACHE_FILE, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+            loaded_date_str = payload.get("loaded_date")
+            loaded_date = date.fromisoformat(loaded_date_str) if loaded_date_str else None
+            return loaded_date, payload.get("ohlcv", {})
+    except Exception as e:
+        logger.error(f"[Scanner] Read OHLCV cache error: {e}")
+        return None, {}
+
 
 # ===== HELPERS =====
 
@@ -58,34 +85,70 @@ def _load_ohlcv_batch():
     global _ohlcv_cache, _ohlcv_loaded_date
 
     today = date.today()
-    if _ohlcv_loaded_date == today and _ohlcv_cache:
-        return  # Đã tải hôm nay rồi, không tải lại
 
-    logger.info(f"[Scanner] Đang tải OHLCV cho {len(VN100_TICKERS)} mã...")
+    # 1. Thử đọc cache từ đĩa trước nếu chưa có trong RAM
+    if not _ohlcv_cache:
+        disk_date, disk_cache = _read_ohlcv_cache()
+        if disk_cache:
+            _ohlcv_cache = disk_cache
+            _ohlcv_loaded_date = disk_date
+            logger.info(f"[Scanner] Đã tải thành công {len(_ohlcv_cache)} mã từ cache đĩa.")
+
+    # 2. Nếu cache đĩa/RAM đã được tải hôm nay rồi và có đủ toàn bộ mã, không tải lại
+    if _ohlcv_loaded_date == today and len(_ohlcv_cache) >= len(VN100_TICKERS):
+        return
+
+    logger.info(f"[Scanner] Đang tải OHLCV cho VN100 (Đã có sẵn {len(_ohlcv_cache)}/{len(VN100_TICKERS)})...")
     from vnstock.api.quote import Quote
 
-    success_count = 0
+    success_count = len([t for t in VN100_TICKERS if t in _ohlcv_cache])
+    
     for ticker in VN100_TICKERS:
+        # Nếu đã có dữ liệu của mã này hôm nay, bỏ qua không gọi API nữa để tránh rate limit
+        if ticker in _ohlcv_cache and _ohlcv_loaded_date == today:
+            continue
+
         try:
             q = Quote(symbol=ticker, source="VCI")
             end = today.strftime("%Y-%m-%d")
             start = (today - timedelta(days=120)).strftime("%Y-%m-%d")
             df = q.history(start=start, end=end, interval="1D")
             if df is not None and not df.empty:
+                import pandas as pd
                 records = df.to_dict("records")
+                clean_records = []
                 for r in records:
-                    r["date"] = str(r.get("time", r.get("date", "")))[:10]
-                    for col in ("open", "high", "low", "close"):
-                        if r.get(col) is not None:
-                            r[col] = float(r[col]) * 1000
-                    r["volume"] = int(r.get("volume", 0))
-                _ohlcv_cache[ticker] = records
+                    dt = str(r.get("time", r.get("date", "")))[:10]
+                    
+                    def safe_float(k, mult=1.0):
+                        v = r.get(k)
+                        if v is None or pd.isna(v):
+                            return 0.0
+                        return float(v) * mult
+                        
+                    clean_records.append({
+                        "date": dt,
+                        "open": safe_float("open", 1000.0),
+                        "high": safe_float("high", 1000.0),
+                        "low": safe_float("low", 1000.0),
+                        "close": safe_float("close", 1000.0),
+                        "volume": int(safe_float("volume"))
+                    })
+                _ohlcv_cache[ticker] = clean_records
                 success_count += 1
-        except Exception as e:
+                
+                # Ghi nhận ngay vào cache đĩa sau mỗi mã tải thành công để đảm bảo khả năng resume
+                _write_ohlcv_cache(_ohlcv_cache, today.isoformat())
+                
+        except BaseException as e:
             logger.debug(f"[Scanner] OHLCV load skip {ticker}: {e}")
+            if isinstance(e, SystemExit):
+                logger.warning(f"[Scanner] Tạm dừng tải lịch sử giá do chạm giới hạn Rate Limit của vnstock ở mã {ticker}.")
+                break
 
     _ohlcv_loaded_date = today
-    logger.info(f"[Scanner] OHLCV đã tải: {success_count}/{len(VN100_TICKERS)} mã thành công.")
+    _write_ohlcv_cache(_ohlcv_cache, today.isoformat())
+    logger.info(f"[Scanner] Trạng thái OHLCV hiện tại: {success_count}/{len(VN100_TICKERS)} mã khả dụng.")
 
 
 def _score_ticker(ticker: str, live_price: float = None, live_vol: int = None) -> dict:
@@ -277,7 +340,7 @@ def scan_all_stocks(force_refresh: bool = False) -> dict:
                     
                 live_prices[ticker] = {"price": price, "volume": vol}
         logger.info(f"[Scanner] Đã lấy giá realtime: {len(live_prices)}/{len(VN100_TICKERS)} mã.")
-    except Exception as e:
+    except BaseException as e:
         logger.warning(f"[Scanner] Không lấy được giá realtime: {e}")
 
     # Bước 3: Chấm điểm từng mã
