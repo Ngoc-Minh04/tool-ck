@@ -36,7 +36,15 @@ async def foreign():
 async def quick_quotes(tickers: str = None):
     if tickers:
         ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        # Sort tickers to create a consistent cache key
+        cache_key = f"market:quick-quotes:{','.join(sorted(ticker_list))}"
+        cached = await cache_get(cache_key)
+        if cached:
+            return cached
+            
         data = await run_in_threadpool(get_quick_quotes, ticker_list)
+        # Cache for 1 second to handle rapid requests/multiple tabs safely
+        await cache_set(cache_key, data, ttl=1)
         return data
         
     cached = await cache_get("market:quick-quotes")
@@ -45,3 +53,4 @@ async def quick_quotes(tickers: str = None):
     data = await run_in_threadpool(get_quick_quotes)
     await cache_set("market:quick-quotes", data, ttl=15) # cache for 15 seconds
     return data
+

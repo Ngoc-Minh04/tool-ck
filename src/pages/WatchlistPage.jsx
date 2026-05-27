@@ -7,7 +7,7 @@ import useWatchlist from '../store/watchlistStore';
 import Header from '../components/Layout/Header';
 import { stockApi } from '../services/stockApi';
 
-const POLL_INTERVAL = 15000; // 15 giây
+const POLL_INTERVAL = 1500; // 1.5 giây
 
 const PriceBadge = ({ price, changePct }) => {
   if (!price) return (
@@ -341,7 +341,7 @@ export default function WatchlistPage() {
               style={{ borderTop: '1px solid rgba(79,195,247,0.06)' }}
             >
               <Eye size={11} className="inline mr-1" />
-              Nhấn vào mã để xem phân tích chi tiết • Tự động cập nhật mỗi 15 giây
+              Nhấn vào mã để xem phân tích chi tiết • Tự động cập nhật mỗi 1.5 giây
             </div>
           </div>
         )}

@@ -3,10 +3,10 @@
     "VCB": {
       "ticker": "VCB",
       "exchange": "HOSE",
-      "price": 63800,
-      "change": -600,
-      "pct": -0.93,
-      "vol": 1317,
+      "price": 63900,
+      "change": -500,
+      "pct": -0.78,
+      "vol": 1595,
       "cap": "355T",
       "ref": 64400,
       "ceil": 68900,
@@ -19,10 +19,10 @@
     "BID": {
       "ticker": "BID",
       "exchange": "HOSE",
-      "price": 43400,
-      "change": -200,
-      "pct": -0.46,
-      "vol": 995,
+      "price": 43350,
+      "change": -250,
+      "pct": -0.57,
+      "vol": 1369,
       "cap": "250T",
       "ref": 43600,
       "ceil": 46650,
@@ -35,10 +35,10 @@
     "CTG": {
       "ticker": "CTG",
       "exchange": "HOSE",
-      "price": 35350,
-      "change": 100,
-      "pct": 0.28,
-      "vol": 2373,
+      "price": 35300,
+      "change": 50,
+      "pct": 0.14,
+      "vol": 3467,
       "cap": "170T",
       "ref": 35250,
       "ceil": 37700,
@@ -51,26 +51,26 @@
     "FPT": {
       "ticker": "FPT",
       "exchange": "HOSE",
-      "price": 74000,
-      "change": -500,
-      "pct": -0.67,
-      "vol": 3084,
+      "price": 73900,
+      "change": -600,
+      "pct": -0.81,
+      "vol": 4050,
       "cap": "98T",
       "ref": 74500,
       "ceil": 79700,
       "floor": 69300,
       "high": 75300,
-      "low": 73900,
+      "low": 73800,
       "open": 74500,
       "is_live": true
     },
     "HPG": {
       "ticker": "HPG",
       "exchange": "HOSE",
-      "price": 24300,
-      "change": 50,
-      "pct": 0.21,
-      "vol": 8231,
+      "price": 24350,
+      "change": 100,
+      "pct": 0.41,
+      "vol": 9200,
       "cap": "138T",
       "ref": 24250,
       "ceil": 25900,
@@ -83,10 +83,10 @@
     "VIC": {
       "ticker": "VIC",
       "exchange": "HOSE",
-      "price": 209000,
-      "change": -4000,
-      "pct": -1.88,
-      "vol": 1296,
+      "price": 206900,
+      "change": -6100,
+      "pct": -2.86,
+      "vol": 1532,
       "cap": "82T",
       "ref": 213000,
       "ceil": 227900,
@@ -99,10 +99,10 @@
     "VNM": {
       "ticker": "VNM",
       "exchange": "HOSE",
-      "price": 58900,
-      "change": -200,
-      "pct": -0.34,
-      "vol": 1000,
+      "price": 59000,
+      "change": -100,
+      "pct": -0.17,
+      "vol": 1196,
       "cap": "123T",
       "ref": 59100,
       "ceil": 63200,
@@ -115,10 +115,10 @@
     "ACB": {
       "ticker": "ACB",
       "exchange": "HOSE",
-      "price": 24800,
-      "change": 0,
-      "pct": 0.0,
-      "vol": 11107,
+      "price": 24700,
+      "change": -100,
+      "pct": -0.4,
+      "vol": 13092,
       "cap": "96T",
       "ref": 24800,
       "ceil": 26500,
@@ -131,10 +131,10 @@
     "MBB": {
       "ticker": "MBB",
       "exchange": "HOSE",
-      "price": 25350,
-      "change": -150,
-      "pct": -0.59,
-      "vol": 2796,
+      "price": 25400,
+      "change": -100,
+      "pct": -0.39,
+      "vol": 3695,
       "cap": "110T",
       "ref": 25500,
       "ceil": 27250,
@@ -150,7 +150,7 @@
       "price": 33100,
       "change": 200,
       "pct": 0.61,
-      "vol": 3489,
+      "vol": 4319,
       "cap": "115T",
       "ref": 32900,
       "ceil": 35200,
@@ -163,10 +163,10 @@
     "SSI": {
       "ticker": "SSI",
       "exchange": "HOSE",
-      "price": 28050,
-      "change": 50,
-      "pct": 0.18,
-      "vol": 3817,
+      "price": 27950,
+      "change": -50,
+      "pct": -0.18,
+      "vol": 4562,
       "cap": "42T",
       "ref": 28000,
       "ceil": 29950,
@@ -179,10 +179,10 @@
     "MWG": {
       "ticker": "MWG",
       "exchange": "HOSE",
-      "price": 79700,
-      "change": 1200,
-      "pct": 1.53,
-      "vol": 2062,
+      "price": 79900,
+      "change": 1400,
+      "pct": 1.78,
+      "vol": 2321,
       "cap": "80T",
       "ref": 78500,
       "ceil": 83900,
@@ -195,26 +195,26 @@
     "GAS": {
       "ticker": "GAS",
       "exchange": "HOSE",
-      "price": 82800,
-      "change": 300,
-      "pct": 0.36,
-      "vol": 268,
+      "price": 82200,
+      "change": -300,
+      "pct": -0.36,
+      "vol": 368,
       "cap": "158T",
       "ref": 82500,
       "ceil": 88200,
       "floor": 76800,
       "high": 83700,
-      "low": 82400,
+      "low": 82000,
       "open": 82500,
       "is_live": true
     },
     "VHM": {
       "ticker": "VHM",
       "exchange": "HOSE",
-      "price": 150000,
-      "change": -3800,
-      "pct": -2.47,
-      "vol": 2835,
+      "price": 148900,
+      "change": -4900,
+      "pct": -3.19,
+      "vol": 3449,
       "cap": "172T",
       "ref": 153800,
       "ceil": 164500,
@@ -227,10 +227,10 @@
     "VRE": {
       "ticker": "VRE",
       "exchange": "HOSE",
-      "price": 31850,
-      "change": -850,
-      "pct": -2.6,
-      "vol": 1867,
+      "price": 31750,
+      "change": -950,
+      "pct": -2.91,
+      "vol": 2510,
       "cap": "51T",
       "ref": 32700,
       "ceil": 34950,
@@ -241,145 +241,38 @@
       "is_live": true
     }
   },
-  "foreign": [
-    {
-      "ticker": "VCB",
-      "buy_value": 1033796000.0,
-      "sell_value": 23439350500.0,
-      "net_value": -22405554500.0,
-      "is_live": true
-    },
-    {
-      "ticker": "BID",
-      "buy_value": 314225000.0,
-      "sell_value": 3800625000.0,
-      "net_value": -3486400000.0,
-      "is_live": true
-    },
-    {
-      "ticker": "CTG",
-      "buy_value": 2245130000.0,
-      "sell_value": 9885245000.0,
-      "net_value": -7640115000.0,
-      "is_live": true
-    },
-    {
-      "ticker": "FPT",
-      "buy_value": 41494177900.0,
-      "sell_value": 78937150000.0,
-      "net_value": -37442972100.0,
-      "is_live": true
-    },
-    {
-      "ticker": "HPG",
-      "buy_value": 29697359800.0,
-      "sell_value": 65085355800.0,
-      "net_value": -35387996000.0,
-      "is_live": true
-    },
-    {
-      "ticker": "VIC",
-      "buy_value": 16147312500.0,
-      "sell_value": 67982874000.0,
-      "net_value": -51835561500.0,
-      "is_live": true
-    },
-    {
-      "ticker": "VNM",
-      "buy_value": 5615330000.0,
-      "sell_value": 18776047000.0,
-      "net_value": -13160717000.0,
-      "is_live": true
-    },
-    {
-      "ticker": "ACB",
-      "buy_value": 19406316750.0,
-      "sell_value": 39817010400.0,
-      "net_value": -20410693650.0,
-      "is_live": true
-    },
-    {
-      "ticker": "MBB",
-      "buy_value": 1442331500.0,
-      "sell_value": 11896309500.0,
-      "net_value": -10453978000.0,
-      "is_live": true
-    },
-    {
-      "ticker": "TCB",
-      "buy_value": 11948950300.0,
-      "sell_value": 15638855000.0,
-      "net_value": -3689904700.0,
-      "is_live": true
-    },
-    {
-      "ticker": "SSI",
-      "buy_value": 585530000.0,
-      "sell_value": 5621029200.0,
-      "net_value": -5035499200.0,
-      "is_live": true
-    },
-    {
-      "ticker": "MWG",
-      "buy_value": 13949623400.0,
-      "sell_value": 2375193700.0,
-      "net_value": 11574429700.0,
-      "is_live": true
-    },
-    {
-      "ticker": "GAS",
-      "buy_value": 2714445200.0,
-      "sell_value": 4299540000.0,
-      "net_value": -1585094800.0,
-      "is_live": true
-    },
-    {
-      "ticker": "VHM",
-      "buy_value": 9499785400.0,
-      "sell_value": 128401580000.0,
-      "net_value": -118901794600.0,
-      "is_live": true
-    },
-    {
-      "ticker": "VRE",
-      "buy_value": 1979416850.0,
-      "sell_value": 16628895000.0,
-      "net_value": -14649478150.0,
-      "is_live": true
-    }
-  ],
   "indices": [
     {
       "index": "VNINDEX",
-      "close": 1873.86,
-      "change": -10.32,
-      "change_pct": -0.55,
-      "volume": 243491188,
-      "advance": 157,
-      "decline": 187,
-      "unchanged": 56,
+      "close": 1868.52,
+      "change": -15.66,
+      "change_pct": -0.83,
+      "volume": 315385819,
+      "advance": 133,
+      "decline": 212,
+      "unchanged": 55,
       "is_live": true
     },
     {
       "index": "VN30",
-      "close": 2021.34,
-      "change": -6.56,
-      "change_pct": -0.32,
-      "volume": 96023547,
-      "advance": 11,
-      "decline": 15,
-      "unchanged": 4,
+      "close": 2019.14,
+      "change": -8.76,
+      "change_pct": -0.43,
+      "volume": 125150953,
+      "advance": 12,
+      "decline": 16,
+      "unchanged": 2,
       "is_live": true
     },
     {
       "index": "HNX30",
-      "close": 526.82,
-      "change": 0.57,
-      "change_pct": 0.11,
-      "volume": 10396028,
+      "close": 525.75,
+      "change": -0.5,
+      "change_pct": -0.1,
+      "volume": 12051041,
       "advance": 13,
-      "decline": 14,
-      "unchanged": 3,
+      "decline": 15,
+      "unchanged": 2,
       "is_live": true
     },
     {
@@ -387,10 +280,117 @@
       "close": 126.51,
       "change": 0.3,
       "change_pct": 0.24,
-      "volume": 15588115,
-      "advance": 348,
-      "decline": 347,
-      "unchanged": 105,
+      "volume": 26938172,
+      "advance": 376,
+      "decline": 313,
+      "unchanged": 111,
+      "is_live": true
+    }
+  ],
+  "foreign": [
+    {
+      "ticker": "VCB",
+      "buy_value": 1142446000.0,
+      "sell_value": 24692530500.0,
+      "net_value": -23550084500.0,
+      "is_live": true
+    },
+    {
+      "ticker": "BID",
+      "buy_value": 383745000.0,
+      "sell_value": 5987360000.0,
+      "net_value": -5603615000.0,
+      "is_live": true
+    },
+    {
+      "ticker": "CTG",
+      "buy_value": 2298230000.0,
+      "sell_value": 16664675000.0,
+      "net_value": -14366445000.0,
+      "is_live": true
+    },
+    {
+      "ticker": "FPT",
+      "buy_value": 53389637900.0,
+      "sell_value": 113671600000.0,
+      "net_value": -60281962100.0,
+      "is_live": true
+    },
+    {
+      "ticker": "HPG",
+      "buy_value": 40732779800.0,
+      "sell_value": 76728835800.0,
+      "net_value": -35996056000.0,
+      "is_live": true
+    },
+    {
+      "ticker": "VIC",
+      "buy_value": 23209022500.0,
+      "sell_value": 79574054000.0,
+      "net_value": -56365031500.0,
+      "is_live": true
+    },
+    {
+      "ticker": "VNM",
+      "buy_value": 8258530000.0,
+      "sell_value": 28245407000.0,
+      "net_value": -19986877000.0,
+      "is_live": true
+    },
+    {
+      "ticker": "ACB",
+      "buy_value": 23880531750.0,
+      "sell_value": 44413020400.0,
+      "net_value": -20532488650.0,
+      "is_live": true
+    },
+    {
+      "ticker": "MBB",
+      "buy_value": 1648476500.0,
+      "sell_value": 16234699500.0,
+      "net_value": -14586223000.0,
+      "is_live": true
+    },
+    {
+      "ticker": "TCB",
+      "buy_value": 17490755300.0,
+      "sell_value": 19405325000.0,
+      "net_value": -1914569700.0,
+      "is_live": true
+    },
+    {
+      "ticker": "SSI",
+      "buy_value": 683655000.0,
+      "sell_value": 6455244200.0,
+      "net_value": -5771589200.0,
+      "is_live": true
+    },
+    {
+      "ticker": "MWG",
+      "buy_value": 21931103400.0,
+      "sell_value": 3428013700.0,
+      "net_value": 18503089700.0,
+      "is_live": true
+    },
+    {
+      "ticker": "GAS",
+      "buy_value": 3813535200.0,
+      "sell_value": 4539100000.0,
+      "net_value": -725564800.0,
+      "is_live": true
+    },
+    {
+      "ticker": "VHM",
+      "buy_value": 11967145400.0,
+      "sell_value": 150124832200.0,
+      "net_value": -138157686800.0,
+      "is_live": true
+    },
+    {
+      "ticker": "VRE",
+      "buy_value": 3523176850.0,
+      "sell_value": 20231445000.0,
+      "net_value": -16708268150.0,
       "is_live": true
     }
   ]

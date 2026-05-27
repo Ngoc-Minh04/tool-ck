@@ -224,6 +224,52 @@ def get_market_overview() -> list:
             for ci in cached_indices:
                 ci["is_live"] = False
             return cached_indices
+            
+        # Nếu cache rỗng, thử gọi API thật để lấy chỉ số đóng cửa thực tế của phiên gần nhất
+        try:
+            from concurrent.futures import ThreadPoolExecutor
+            indices = ["VNINDEX", "VN30", "HNX30", "UPCOM"]
+            
+            def fetch_index_outside(idx):
+                try:
+                    from vnstock.api.quote import Quote
+                    query_symbol = "UPCOMINDEX" if idx == "UPCOM" else idx
+                    q = Quote(symbol=query_symbol, source="VCI")
+                    end = date.today().strftime("%Y-%m-%d")
+                    start = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
+                    df = q.history(start=start, end=end, interval="1D")
+                    if df is not None and not df.empty:
+                        last = df.iloc[-1]
+                        prev = df.iloc[-2] if len(df) > 1 else last
+                        change = float(last["close"]) - float(prev["close"])
+                        pct = (change / float(prev["close"])) * 100 if prev["close"] else 0
+                        breadth = _estimate_index_breadth(idx, pct)
+                        return {
+                            "index": idx,
+                            "close": round(float(last["close"]), 2),
+                            "change": round(change, 2),
+                            "change_pct": round(pct, 2),
+                            "volume": int(last.get("volume", 0)),
+                            "advance": breadth["advance"],
+                            "decline": breadth["decline"],
+                            "unchanged": breadth["unchanged"],
+                            "is_live": False
+                        }
+                except Exception:
+                    pass
+                return _mock_index(idx)
+                
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                result = list(executor.map(fetch_index_outside, indices))
+                
+            # Cập nhật cache nếu lấy được giá trị thực tế
+            any_real = any(r.get("close") != 100 for r in result)
+            if any_real:
+                _write_cache("indices", result)
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to fetch market indices for cache: {e}")
+            
         return [_mock_index(idx) for idx in ["VNINDEX", "VN30", "HNX30", "UPCOM"]]
 
     from concurrent.futures import ThreadPoolExecutor
@@ -371,6 +417,43 @@ def get_foreign_flow(df = None) -> list:
             return cached_foreign
         if _last_foreign_flow:
             return _last_foreign_flow
+            
+        # Nếu cache trống, thử gọi API thật 1 lần để lấy giao dịch khối ngoại đóng cửa của phiên gần nhất
+        try:
+            tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
+            from vnstock.api.trading import Trading
+            t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+            df_live = t.price_board(symbols_list=tickers)
+            if df_live is not None and not df_live.empty:
+                results = []
+                for idx_row, row in df_live.iterrows():
+                    ticker = row.get(('listing', 'symbol'))
+                    if not ticker or pd.isna(ticker):
+                        continue
+                    ticker = str(ticker).upper()
+                    
+                    def safe_val(v, default=0.0):
+                        if v is None or pd.isna(v):
+                            return default
+                        return float(v)
+                        
+                    buy_val = safe_val(row.get(('match', 'foreign_buy_value')), 0.0)
+                    sell_val = safe_val(row.get(('match', 'foreign_sell_value')), 0.0)
+                    net_val = buy_val - sell_val
+                    results.append({
+                        "ticker": ticker,
+                        "buy_value": buy_val,
+                        "sell_value": sell_val,
+                        "net_value": net_val,
+                        "is_live": False
+                    })
+                if len(results) > 0 and sum(abs(r["buy_value"]) + abs(r["sell_value"]) for r in results) > 0:
+                    _write_cache("foreign", results)
+                    _last_foreign_flow = results
+                    return results
+        except Exception as e:
+            logger.warning(f"Failed to fetch foreign flow for cache: {e}")
+            
         return mock_fallback
 
     import pandas as pd
@@ -599,26 +682,95 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     tickers = ticker_list if ticker_list is not None else default_tickers
 
     fallbacks = {
-        'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 64400.0, 'change': 700.0, 'pct': 1.1, 'vol': 2140, 'cap': '355T', 'ref': 63700.0, 'ceil': 68100.0, 'floor': 59300.0, 'high': 64500.0, 'low': 63700.0, 'open': 63700.0 },
-        'BID': { 'ticker': 'BID', 'exchange': 'HOSE', 'price': 43600.0, 'change': 600.0, 'pct': 1.4, 'vol': 3560, 'cap': '250T', 'ref': 43000.0, 'ceil': 46000.0, 'floor': 40000.0, 'high': 43700.0, 'low': 43000.0, 'open': 43000.0 },
-        'CTG': { 'ticker': 'CTG', 'exchange': 'HOSE', 'price': 35250.0, 'change': 450.0, 'pct': 1.29, 'vol': 4210, 'cap': '170T', 'ref': 34800.0, 'ceil': 37200.0, 'floor': 32400.0, 'high': 35300.0, 'low': 34800.0, 'open': 34800.0 },
-        'FPT': { 'ticker': 'FPT', 'exchange': 'HOSE', 'price': 74500.0, 'change': 1000.0, 'pct': 1.36, 'vol': 1870, 'cap': '98T', 'ref': 73500.0, 'ceil': 78600.0, 'floor': 68400.0, 'high': 74600.0, 'low': 73500.0, 'open': 73500.0 },
-        'HPG': { 'ticker': 'HPG', 'exchange': 'HOSE', 'price': 24250.0, 'change': 150.0, 'pct': 0.62, 'vol': 8940, 'cap': '138T', 'ref': 24100.0, 'ceil': 25750.0, 'floor': 22450.0, 'high': 24300.0, 'low': 24100.0, 'open': 24100.0 },
-        'VIC': { 'ticker': 'VIC', 'exchange': 'HOSE', 'price': 213000.0, 'change': -5800.0, 'pct': -2.65, 'vol': 1230, 'cap': '82T', 'ref': 218800.0, 'ceil': 234100.0, 'floor': 203500.0, 'high': 218800.0, 'low': 212000.0, 'open': 218800.0 },
-        'VNM': { 'ticker': 'VNM', 'exchange': 'HOSE', 'price': 59100.0, 'change': 0.0, 'pct': 0.0, 'vol': 980, 'cap': '123T', 'ref': 59100.0, 'ceil': 63200.0, 'floor': 55000.0, 'high': 59200.0, 'low': 58900.0, 'open': 59100.0 },
-        'ACB': { 'ticker': 'ACB', 'exchange': 'HOSE', 'price': 24800.0, 'change': 1250.0, 'pct': 5.31, 'vol': 5670, 'cap': '96T', 'ref': 23550.0, 'ceil': 25150.0, 'floor': 21950.0, 'high': 24900.0, 'low': 23550.0, 'open': 23550.0 },
-        'MBB': { 'ticker': 'MBB', 'exchange': 'HOSE', 'price': 25500.0, 'change': 700.0, 'pct': 2.82, 'vol': 6120, 'cap': '110T', 'ref': 24800.0, 'ceil': 26500.0, 'floor': 23100.0, 'high': 25600.0, 'low': 24800.0, 'open': 24800.0 },
-        'TCB': { 'ticker': 'TCB', 'exchange': 'HOSE', 'price': 32900.0, 'change': 350.0, 'pct': 1.08, 'vol': 3450, 'cap': '115T', 'ref': 32550.0, 'ceil': 34800.0, 'floor': 30300.0, 'high': 33000.0, 'low': 32550.0, 'open': 32550.0 },
-        'SSI': { 'ticker': 'SSI', 'exchange': 'HOSE', 'price': 28000.0, 'change': 550.0, 'pct': 2.0, 'vol': 4300, 'cap': '42T', 'ref': 27450.0, 'ceil': 29350.0, 'floor': 25550.0, 'high': 28100.0, 'low': 27450.0, 'open': 27450.0 },
+        'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 85200.0, 'change': 400.0, 'pct': 0.47, 'vol': 2140, 'cap': '530.6T', 'ref': 84800.0, 'ceil': 90700.0, 'floor': 78900.0, 'high': 85500.0, 'low': 84500.0, 'open': 84800.0 },
+        'BID': { 'ticker': 'BID', 'exchange': 'HOSE', 'price': 42500.0, 'change': -300.0, 'pct': -0.7, 'vol': 3560, 'cap': '245T', 'ref': 42800.0, 'ceil': 45750.0, 'floor': 39850.0, 'high': 43000.0, 'low': 42400.0, 'open': 42800.0 },
+        'CTG': { 'ticker': 'CTG', 'exchange': 'HOSE', 'price': 28700.0, 'change': 100.0, 'pct': 0.35, 'vol': 4210, 'cap': '185T', 'ref': 28600.0, 'ceil': 30600.0, 'floor': 26600.0, 'high': 28900.0, 'low': 28500.0, 'open': 28600.0 },
+        'FPT': { 'ticker': 'FPT', 'exchange': 'HOSE', 'price': 132000.0, 'change': 1500.0, 'pct': 1.15, 'vol': 1870, 'cap': '145T', 'ref': 130500.0, 'ceil': 139600.0, 'floor': 121400.0, 'high': 132500.0, 'low': 130000.0, 'open': 130500.0 },
+        'HPG': { 'ticker': 'HPG', 'exchange': 'HOSE', 'price': 24600.0, 'change': -500.0, 'pct': -1.99, 'vol': 8940, 'cap': '140T', 'ref': 25100.0, 'ceil': 26850.0, 'floor': 23350.0, 'high': 25200.0, 'low': 24500.0, 'open': 25100.0 },
+        'VIC': { 'ticker': 'VIC', 'exchange': 'HOSE', 'price': 38900.0, 'change': 200.0, 'pct': 0.52, 'vol': 1230, 'cap': '135T', 'ref': 38700.0, 'ceil': 41400.0, 'floor': 36000.0, 'high': 39100.0, 'low': 38600.0, 'open': 38700.0 },
+        'VNM': { 'ticker': 'VNM', 'exchange': 'HOSE', 'price': 68500.0, 'change': -200.0, 'pct': -0.29, 'vol': 980, 'cap': '125T', 'ref': 68700.0, 'ceil': 73500.0, 'floor': 63900.0, 'high': 69000.0, 'low': 68300.0, 'open': 68700.0 },
+        'ACB': { 'ticker': 'ACB', 'exchange': 'HOSE', 'price': 24800.0, 'change': 300.0, 'pct': 1.22, 'vol': 5670, 'cap': '95T', 'ref': 24500.0, 'ceil': 26200.0, 'floor': 22800.0, 'high': 24900.0, 'low': 24450.0, 'open': 24500.0 },
+        'MBB': { 'ticker': 'MBB', 'exchange': 'HOSE', 'price': 26500.0, 'change': 200.0, 'pct': 0.76, 'vol': 6120, 'cap': '115T', 'ref': 26300.0, 'ceil': 28100.0, 'floor': 24500.0, 'high': 26600.0, 'low': 26200.0, 'open': 26300.0 },
+        'TCB': { 'ticker': 'TCB', 'exchange': 'HOSE', 'price': 32100.0, 'change': -100.0, 'pct': -0.31, 'vol': 3450, 'cap': '175T', 'ref': 32200.0, 'ceil': 34450.0, 'floor': 30000.0, 'high': 32400.0, 'low': 32000.0, 'open': 32200.0 },
+        'SSI': { 'ticker': 'SSI', 'exchange': 'HOSE', 'price': 28500.0, 'change': -600.0, 'pct': -2.06, 'vol': 4300, 'cap': '43T', 'ref': 29100.0, 'ceil': 31100.0, 'floor': 27100.0, 'high': 29200.0, 'low': 28400.0, 'open': 29100.0 },
         'MWG': { 'ticker': 'MWG', 'exchange': 'HOSE', 'price': 55000.0, 'change': 800.0, 'pct': 1.48, 'vol': 2200, 'cap': '80T', 'ref': 54200.0, 'ceil': 58000.0, 'floor': 50400.0, 'high': 55400.0, 'low': 54200.0, 'open': 54200.0 },
-        'GAS': { 'ticker': 'GAS', 'exchange': 'HOSE', 'price': 82500.0, 'change': 500.0, 'pct': 0.61, 'vol': 680, 'cap': '158T', 'ref': 82000.0, 'ceil': 87700.0, 'floor': 76300.0, 'high': 82700.0, 'low': 82000.0, 'open': 82000.0 },
-        'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.00, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
+        'GAS': { 'ticker': 'GAS', 'exchange': 'HOSE', 'price': 72000.0, 'change': 100.0, 'pct': 0.14, 'vol': 680, 'cap': '165T', 'ref': 71900.0, 'ceil': 76900.0, 'floor': 66900.0, 'high': 72300.0, 'low': 71800.0, 'open': 71900.0 },
+        'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.0, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
         'VRE': { 'ticker': 'VRE', 'exchange': 'HOSE', 'price': 22500.0, 'change': 300.0, 'pct': 1.35, 'vol': 1950, 'cap': '51T', 'ref': 22200.0, 'ceil': 23750.0, 'floor': 20650.0, 'high': 22700.0, 'low': 22150.0, 'open': 22200.0 },
     }
 
-    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước hoặc mock
+    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
     if not is_market_active():
         cached_quotes = _read_cache("quotes", {})
+        
+        # Nếu cache bị thiếu hoặc trống, thử kết nối API thực tế 1 lần để lấy giá đóng cửa thực tế phiên gần nhất
+        has_all_cached = all(t.upper() in cached_quotes for t in tickers)
+        if not has_all_cached:
+            try:
+                if df is None:
+                    from vnstock.api.trading import Trading
+                    t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+                    df_live = t.price_board(symbols_list=tickers)
+                else:
+                    df_live = df
+                    
+                if df_live is not None and not df_live.empty:
+                    for idx_row, row in df_live.iterrows():
+                        ticker = row.get(('listing', 'symbol'))
+                        if not ticker or pd.isna(ticker):
+                            continue
+                        ticker = str(ticker).upper()
+                        
+                        def safe_val(v, default=0.0):
+                            if v is None or pd.isna(v):
+                                return default
+                            return float(v)
+
+                        price = safe_val(row.get(('match', 'match_price')))
+                        ref_price = safe_val(row.get(('listing', 'ref_price')))
+                        if price <= 0:
+                            price = ref_price
+                            
+                        ceil_price = safe_val(row.get(('listing', 'ceiling')), price * 1.07)
+                        floor_price = safe_val(row.get(('listing', 'floor')), price * 0.93)
+                        open_price = safe_val(row.get(('match', 'open_price')), price)
+                        high_price = safe_val(row.get(('match', 'highest')), price)
+                        low_price = safe_val(row.get(('match', 'lowest')), price)
+                        volume = int(safe_val(row.get(('match', 'accumulated_volume')), 0.0))
+                        
+                        if price < 1000:
+                            price *= 1000
+                            ref_price *= 1000
+                            ceil_price *= 1000
+                            floor_price *= 1000
+                            open_price *= 1000
+                            high_price *= 1000
+                            low_price *= 1000
+                            
+                        change = price - ref_price
+                        pct = (change / ref_price) * 100 if ref_price else 0
+                        
+                        res = {
+                            "ticker": ticker,
+                            "exchange": "HOSE",
+                            "price": round(price),
+                            "change": round(change),
+                            "pct": round(pct, 2),
+                            "vol": volume // 1000 if volume >= 1000 else volume,
+                            "cap": fallbacks.get(ticker, {}).get("cap", "N/A"),
+                            "ref": round(ref_price),
+                            "ceil": round(ceil_price),
+                            "floor": round(floor_price),
+                            "high": round(high_price),
+                            "low": round(low_price),
+                            "open": round(open_price),
+                            "is_live": False
+                        }
+                        cached_quotes[ticker] = res
+                    _write_cache("quotes", cached_quotes)
+            except Exception as e:
+                logger.warning(f"Failed to fetch quotes for cache outside market hours: {e}")
+
         results = []
         for ticker in tickers:
             t_upper = ticker.upper()
@@ -635,7 +787,6 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
                     fb_copy["is_live"] = False
                     results.append(fb_copy)
                 else:
-                    # Tạo mock data tối thiểu cho mã lạ ngoài giờ
                     results.append({
                         "ticker": t_upper,
                         "exchange": "HOSE",
