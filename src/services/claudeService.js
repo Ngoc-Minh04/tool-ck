@@ -319,7 +319,7 @@ export const parseClaudeError = (error) => {
     return 'API Key không hợp lệ. Vui lòng kiểm tra lại trong Cài đặt.';
   }
   if (msg === 'RATE_LIMIT_EXCEEDED') {
-    return 'Vượt quá giới hạn gọi API (20 req/phút). Vui lòng thử lại sau vài phút.';
+    return 'Hết hạn mức gọi API (Quota Exceeded) hoặc vượt giới hạn tần suất. Vui lòng đổi model, dùng API Key cá nhân trong Cài đặt hoặc thử lại sau.';
   }
   if (msg === 'NETWORK_ERROR') {
     return 'Lỗi kết nối mạng hoặc Backend đang đóng. Vui lòng khởi động backend FastAPI.';

@@ -75,6 +75,7 @@ export const MODELS = [
   { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', description: 'Cân bằng tốc độ & chất lượng' },
   { value: 'claude-opus-4-5', label: 'Claude Opus 4.5', description: 'Chất lượng cao nhất' },
   { value: 'claude-haiku-3-5', label: 'Claude Haiku 3.5', description: 'Nhanh & tiết kiệm' },
+  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Stable)', description: 'Bản ổn định, hạn mức lớn (1.500 lượt/ngày)' },
   { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Mô hình nhanh, thông minh (1.500 lượt/ngày)' },
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Tốc độ nhanh, cực kỳ ổn định (1.500 lượt/ngày)' },
   { value: 'gemini-3.0-flash', label: 'Gemini 3.0 Flash', description: 'Bản nâng cấp 3.0, mượt mà (1.500 lượt/ngày)' },

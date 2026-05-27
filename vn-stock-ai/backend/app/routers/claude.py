@@ -50,13 +50,15 @@ async def _call_gemini(key: str, body: dict, stream: bool):
         gemini_model = body_model
         if gemini_model == "gemini-3.0-flash":
             gemini_model = "gemini-3-flash-preview"
+        elif gemini_model == "gemini-1.5-flash":
+            gemini_model = "gemini-flash-latest"
     else:
         # Fallback mapping for Claude models when using Gemini API Key
-        gemini_model = "gemini-2.0-flash"
+        gemini_model = "gemini-2.5-flash"
         if "haiku" in body_model:
-            gemini_model = "gemini-2.0-flash"
+            gemini_model = "gemini-2.5-flash"
         elif "sonnet" in body_model:
-            gemini_model = "gemini-2.0-flash"
+            gemini_model = "gemini-2.5-flash"
         elif "opus" in body_model:
             gemini_model = "gemini-3.5-flash"
 
@@ -110,6 +112,13 @@ async def _call_gemini(key: str, body: dict, stream: bool):
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(url, json=gemini_body)
             res_json = r.json()
+            if r.status_code != 200:
+                logger.error(f"Gemini API returned status {r.status_code}: {res_json}")
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=r.status_code,
+                    content={"error": {"message": res_json.get("error", {}).get("message", "Lỗi dịch vụ Gemini AI")}}
+                )
             try:
                 text = res_json["candidates"][0]["content"]["parts"][0]["text"]
                 return {
@@ -117,8 +126,8 @@ async def _call_gemini(key: str, body: dict, stream: bool):
                     "role": "assistant"
                 }
             except Exception as e:
-                logger.error(f"Gemini error response: {res_json}")
-                return {"error": f"Gemini API Error: {str(e)}", "raw": res_json}
+                logger.error(f"Gemini parse error: {res_json}")
+                return {"error": f"Gemini Parse Error: {str(e)}", "raw": res_json}
 
 
 async def _call_openai(key: str, body: dict, stream: bool):
