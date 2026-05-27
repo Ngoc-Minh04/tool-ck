@@ -224,6 +224,7 @@ def get_market_overview() -> list:
             for ci in cached_indices:
                 ci["is_live"] = False
             return cached_indices
+        return [_mock_index(idx) for idx in ["VNINDEX", "VN30", "HNX30", "UPCOM"]]
 
     from concurrent.futures import ThreadPoolExecutor
     indices = ["VNINDEX", "VN30", "HNX30", "UPCOM"]
@@ -350,18 +351,7 @@ def get_top_movers() -> dict:
 
 
 def get_foreign_flow(df = None) -> list:
-    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
-    if not is_market_active():
-        cached_foreign = _read_cache("foreign")
-        if cached_foreign:
-            return cached_foreign
-        if _last_foreign_flow:
-            return _last_foreign_flow
-
-    import pandas as pd
     global _last_foreign_flow
-    
-    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     
     mock_fallback = [
         {"ticker": "VCB", "buy_value": 85.4e9, "sell_value": 12.1e9, "net_value": 73.3e9},
@@ -373,6 +363,18 @@ def get_foreign_flow(df = None) -> list:
         {"ticker": "MBB", "buy_value": 35.8e9, "sell_value": 5.2e9, "net_value": 30.6e9},
         {"ticker": "CTG", "buy_value": 15.6e9, "sell_value": 54.5e9, "net_value": -38.9e9},
     ]
+
+    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
+    if not is_market_active():
+        cached_foreign = _read_cache("foreign")
+        if cached_foreign:
+            return cached_foreign
+        if _last_foreign_flow:
+            return _last_foreign_flow
+        return mock_fallback
+
+    import pandas as pd
+    tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     
     cache_lookup = {r["ticker"]: r for r in _last_foreign_flow} if _last_foreign_flow else {}
     mock_lookup = {r["ticker"]: r for r in mock_fallback}
@@ -596,27 +598,6 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     default_tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     tickers = ticker_list if ticker_list is not None else default_tickers
 
-    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
-    if not is_market_active():
-        cached_quotes = _read_cache("quotes", {})
-        results = []
-        for ticker in tickers:
-            t_upper = ticker.upper()
-            if t_upper in cached_quotes:
-                q_copy = cached_quotes[t_upper].copy()
-                q_copy["is_live"] = False
-                results.append(q_copy)
-            elif t_upper in _last_live_quotes:
-                results.append(_last_live_quotes[t_upper])
-            else:
-                fb = fallbacks.get(t_upper)
-                if fb:
-                    fb_copy = fb.copy()
-                    fb_copy["is_live"] = False
-                    results.append(fb_copy)
-        if results:
-            return results
-    
     fallbacks = {
         'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 64400.0, 'change': 700.0, 'pct': 1.1, 'vol': 2140, 'cap': '355T', 'ref': 63700.0, 'ceil': 68100.0, 'floor': 59300.0, 'high': 64500.0, 'low': 63700.0, 'open': 63700.0 },
         'BID': { 'ticker': 'BID', 'exchange': 'HOSE', 'price': 43600.0, 'change': 600.0, 'pct': 1.4, 'vol': 3560, 'cap': '250T', 'ref': 43000.0, 'ceil': 46000.0, 'floor': 40000.0, 'high': 43700.0, 'low': 43000.0, 'open': 43000.0 },
@@ -634,6 +615,44 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
         'VHM': { 'ticker': 'VHM', 'exchange': 'HOSE', 'price': 39500.0, 'change': -400.0, 'pct': -1.00, 'vol': 2800, 'cap': '172T', 'ref': 39900.0, 'ceil': 42700.0, 'floor': 37100.0, 'high': 40100.0, 'low': 39400.0, 'open': 39900.0 },
         'VRE': { 'ticker': 'VRE', 'exchange': 'HOSE', 'price': 22500.0, 'change': 300.0, 'pct': 1.35, 'vol': 1950, 'cap': '51T', 'ref': 22200.0, 'ceil': 23750.0, 'floor': 20650.0, 'high': 22700.0, 'low': 22150.0, 'open': 22200.0 },
     }
+
+    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước hoặc mock
+    if not is_market_active():
+        cached_quotes = _read_cache("quotes", {})
+        results = []
+        for ticker in tickers:
+            t_upper = ticker.upper()
+            if t_upper in cached_quotes:
+                q_copy = cached_quotes[t_upper].copy()
+                q_copy["is_live"] = False
+                results.append(q_copy)
+            elif t_upper in _last_live_quotes:
+                results.append(_last_live_quotes[t_upper])
+            else:
+                fb = fallbacks.get(t_upper)
+                if fb:
+                    fb_copy = fb.copy()
+                    fb_copy["is_live"] = False
+                    results.append(fb_copy)
+                else:
+                    # Tạo mock data tối thiểu cho mã lạ ngoài giờ
+                    results.append({
+                        "ticker": t_upper,
+                        "exchange": "HOSE",
+                        "price": 20000.0,
+                        "change": 0.0,
+                        "pct": 0.0,
+                        "vol": 100,
+                        "cap": "N/A",
+                        "ref": 20000.0,
+                        "ceil": 21400.0,
+                        "floor": 18600.0,
+                        "high": 0.0,
+                        "low": 0.0,
+                        "open": 20000.0,
+                        "is_live": False
+                    })
+        return results
     
     results = []
     try:
@@ -744,12 +763,13 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
 def get_market_overview_with_foreign() -> dict:
     tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     df = None
-    try:
-        from vnstock.api.trading import Trading
-        t = Trading(symbol=tickers[0], source="VCI", show_log=False)
-        df = t.price_board(symbols_list=tickers)
-    except BaseException as e:
-        logger.warning(f"Failed to fetch combined price board in overview: {e}")
+    if is_market_active():
+        try:
+            from vnstock.api.trading import Trading
+            t = Trading(symbol=tickers[0], source="VCI", show_log=False)
+            df = t.price_board(symbols_list=tickers)
+        except BaseException as e:
+            logger.warning(f"Failed to fetch combined price board in overview: {e}")
         
     foreign = get_foreign_flow(df=df)
     indices = get_market_overview()

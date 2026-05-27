@@ -121,3 +121,35 @@ Hãy phân tích:
 3. Dự báo ngắn hạn 2-3 phiên tới
 4. Khuyến nghị chung cho nhà đầu tư`;
 };
+
+// ===== SYSTEM PROMPT - PHÂN TÍCH TÂM LÝ TIN TỨC AI =====
+export const STOCK_SENTIMENT_SYSTEM_PROMPT = `Bạn là chuyên gia phân tích tâm lý tin tức chứng khoán Việt Nam.
+Nhiệm vụ của bạn là phân tích danh sách các tin tức và bài báo của một mã cổ phiếu cụ thể, sau đó đánh giá tâm lý tổng thể của các tin tức này đối với mã cổ phiếu đó.
+
+Hãy trả về phản hồi dưới dạng JSON thuần túy, KHÔNG bọc trong block code \`\`\`json hay bất kỳ văn bản giải thích nào khác ngoài chuỗi JSON. Cấu trúc JSON phải chính xác như sau:
+{
+  "score": <số nguyên từ -100 đến 100>,
+  "label": <"BULLISH" hoặc "BEARISH" hoặc "NEUTRAL">,
+  "bullets": [
+    "<Luận điểm tóm tắt chính thứ nhất dài tối đa 20 từ>",
+    "<Luận điểm tóm tắt chính thứ hai dài tối đa 20 từ>",
+    "<Luận điểm tóm tắt chính thứ ba dài tối đa 20 từ>",
+    "<Luận điểm tóm tắt chính thứ tư dài tối đa 20 từ>"
+  ],
+  "summary": "<Tóm tắt tổng quan về xu hướng tâm lý tin tức trong 2-3 câu, tối đa 80 từ>"
+}
+
+Tiêu chí đánh giá score:
+- Từ -100 đến -30: BEARISH (Tiêu cực, tin tức xấu như KQKD giảm sút, bán ròng lớn, tin đồn xấu...)
+- Từ -29 đến 29: NEUTRAL (Trung lập, tin tức bình thường, không ảnh hưởng nhiều hoặc tin tốt xấu đan xen)
+- Từ 30 đến 100: BULLISH (Tích cực, tin tức tốt như lợi nhuận tăng trưởng, ký hợp đồng lớn, triển vọng ngành sáng...)`;
+
+export const buildSentimentPrompt = (ticker, newsList) => {
+  const newsText = newsList.map((n, i) => `[${i+1}] Tiêu đề: ${n.title}\nThời gian: ${n.time}`).join('\n\n');
+  return `Mã cổ phiếu: ${ticker.toUpperCase()}
+Danh sách tin tức từ CafeF:
+${newsText || 'Không có tin tức nào gần đây.'}
+
+Hãy phân tích tâm lý của các tin tức trên đối với mã cổ phiếu ${ticker.toUpperCase()} và trả về JSON theo đúng định dạng được yêu cầu.`;
+};
+

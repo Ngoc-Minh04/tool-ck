@@ -18,7 +18,12 @@ import useAppStore from '../store/appStore';
 import WatchlistButton from '../components/Analysis/WatchlistButton';
 import useWatchlist from '../store/watchlistStore';
 import toast from 'react-hot-toast';
-import { STOCK_ANALYST_SYSTEM_PROMPT, buildAnalysisPrompt } from '../constants/prompts';
+import { 
+  STOCK_ANALYST_SYSTEM_PROMPT, 
+  buildAnalysisPrompt,
+  STOCK_SENTIMENT_SYSTEM_PROMPT,
+  buildSentimentPrompt
+} from '../constants/prompts';
 import { stockApi } from '../services/stockApi';
 
 const CHART_PERIODS = [
@@ -37,6 +42,7 @@ const CHART_TABS = [
 const INFO_TABS = [
   { value: 'result', label: '🤖 Kết quả AI' },
   { value: 'fundamentals', label: '📐 Cơ bản' },
+  { value: 'sentiment', label: '📰 Tâm lý Tin tức' },
 ];
 
 // So sánh đường giá nhiều mã (normalize về 100 để so tỷ lệ %)
@@ -240,6 +246,293 @@ const CompareTable = ({ stocks }) => {
   );
 };
 
+// ===== BỘ GIẢI MÃ TÂM LÝ TIN TỨC =====
+const parseSentimentJson = (text) => {
+  if (!text) return null;
+  try {
+    let cleaned = text.trim();
+    if (cleaned.includes('```')) {
+      const matches = cleaned.match(/```(?:json)?([\s\S]*?)```/);
+      if (matches && matches[1]) {
+        cleaned = matches[1].trim();
+      }
+    }
+    const startIdx = cleaned.indexOf('{');
+    const endIdx = cleaned.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1) {
+      cleaned = cleaned.substring(startIdx, endIdx + 1);
+    }
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error("Failed to parse sentiment JSON:", err, text);
+    try {
+      const scoreMatch = text.match(/"score"\s*:\s*(-?\d+)/);
+      const labelMatch = text.match(/"label"\s*:\s*"([^"]+)"/);
+      const summaryMatch = text.match(/"summary"\s*:\s*"([^"]+)"/);
+      
+      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
+      const label = labelMatch ? labelMatch[1] : 'NEUTRAL';
+      const summary = summaryMatch ? summaryMatch[1] : 'Đã có lỗi phân tích tóm tắt tin tức.';
+      
+      const bullets = [];
+      const bulletRegex = /"bullets"\s*:\s*\[([\s\S]*?)\]/;
+      const bulletBlock = text.match(bulletRegex);
+      if (bulletBlock) {
+        const items = bulletBlock[1].split(',');
+        for (let item of items) {
+          item = item.trim().replace(/^"|"$/g, '').trim();
+          if (item) bullets.push(item);
+        }
+      }
+      return {
+        score,
+        label,
+        bullets: bullets.length ? bullets : ['Không thể phân tích các luận điểm chi tiết.'],
+        summary
+      };
+    } catch (fallbackErr) {
+      console.error("Fallback sentiment parser failed:", fallbackErr);
+    }
+    return null;
+  }
+};
+
+// ===== DỮ LIỆU TÂM LÝ TIN TỨC MOCK (CHẾ ĐỘ DEMO) =====
+const getMockSentiment = (ticker) => {
+  const t = ticker.toUpperCase();
+  if (t === 'FPT') {
+    return {
+      score: 75,
+      label: 'BULLISH',
+      bullets: [
+        'Doanh thu dịch vụ CNTT nước ngoài tăng trưởng mạnh mẽ trên 25%.',
+        'Hợp tác chiến lược toàn cầu về chip bán dẫn mở ra triển vọng mới.',
+        'Mảng giáo dục và viễn thông duy trì dòng tiền ổn định.',
+        'Khối ngoại liên tục giải ngân ròng củng cố đà tăng giá.'
+      ],
+      summary: 'Tâm lý tin tức về FPT cực kỳ tích cực. Các thông tin xoay quanh xuất khẩu phần mềm, hợp tác bán dẫn và kết quả kinh doanh tăng trưởng hai chữ số được truyền thông đăng tải liên tục.'
+    };
+  } else if (t === 'VCB') {
+    return {
+      score: 20,
+      label: 'NEUTRAL',
+      bullets: [
+        'Lợi nhuận quý 1 duy thái quán quân nhưng tăng trưởng chậm lại.',
+        'Nợ xấu được kiểm soát chặt chẽ dưới mức 1%.',
+        'Thông tin chia cổ tức bằng cổ phiếu hỗ trợ tâm lý ngắn hạn.',
+        'Áp lực giảm lãi suất cho vay khiến biên lợi nhuận NIM đi ngang.'
+      ],
+      summary: 'Tin tức về VCB mang sắc thái trung tính đến tích cực nhẹ. Thị trường đánh giá cao sự an toàn của ngân hàng nhưng kỳ vọng bứt phá lợi nhuận không quá cao trong bối cảnh vĩ mô hiện tại.'
+    };
+  } else if (t === 'VND' || t === 'SSI') {
+    return {
+      score: -35,
+      label: 'BEARISH',
+      bullets: [
+        'Áp lực chốt lời nhóm chứng khoán gia tăng khi thanh khoản thị trường chung sụt giảm.',
+        'Cạnh tranh thị phần môi giới ngày càng khốc liệt với chính sách zero-fee.',
+        'Biến động tự doanh chịu tác động tiêu cực từ danh mục cổ phiếu đi ngang.',
+        'Tin đồn bất lợi về room tín dụng ảnh hưởng tâm lý nhà đầu tư ngắn hạn.'
+      ],
+      summary: 'Tâm lý tin tức phản ánh sự thận trọng rõ rệt. Truyền thông tập trung vào việc suy giảm thanh khoản thị trường và áp lực cạnh tranh phí giao dịch, đè nặng lên kỳ vọng tăng trưởng ngắn hạn.'
+    };
+  } else {
+    // Default mock (e.g. HPG)
+    return {
+      score: 45,
+      label: 'BULLISH',
+      bullets: [
+        'Sản lượng bán hàng thép xây dựng phục hồi tích cực trong tháng qua.',
+        'Giá nguyên liệu đầu vào giảm nhẹ giúp cải thiện biên lợi nhuận gộp.',
+        'Dự án Dung Quất 2 tiến triển đúng tiến độ kỳ vọng.',
+        'Khối ngoại dừng bán ròng và bắt đầu mua gom tích lũy.'
+      ],
+      summary: `Tâm lý tin tức của mã ${t} chuyển biến tích cực nhờ sự phục hồi của hoạt động cốt lõi và tiến độ các dự án trọng điểm được báo chí đưa tin rộng rãi.`
+    };
+  }
+};
+
+// ===== GAUGE ĐO TÂM LÝ TIN TỨC =====
+const SentimentGauge = ({ score, label }) => {
+  const percentage = ((score + 100) / 200) * 100;
+
+  let colorClass = 'text-amber-400';
+  let bgGradient = 'from-amber-500/20 to-amber-500/5';
+  let borderClass = 'border-amber-500/30';
+  let labelText = 'TRUNG LẬP';
+
+  if (label === 'BULLISH' || score >= 30) {
+    colorClass = 'text-emerald-400';
+    bgGradient = 'from-emerald-500/20 to-emerald-500/5';
+    borderClass = 'border-emerald-500/30';
+    labelText = 'TÍCH CỰC (BULLISH)';
+  } else if (label === 'BEARISH' || score <= -30) {
+    colorClass = 'text-rose-400';
+    bgGradient = 'from-rose-500/20 to-rose-500/5';
+    borderClass = 'border-rose-500/30';
+    labelText = 'TIÊU CỰC (BEARISH)';
+  } else {
+    labelText = 'TRUNG LẬP (NEUTRAL)';
+  }
+
+  return (
+    <div className={`p-6 rounded-2xl border ${borderClass} bg-gradient-to-br ${bgGradient} backdrop-blur-md relative overflow-hidden transition-all duration-300`}>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase">Tâm lý Tin tức AI</span>
+          <h4 className={`text-lg font-black tracking-wide ${colorClass} mt-0.5`}>{labelText}</h4>
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] text-slate-500 font-mono block">Chỉ số tâm lý</span>
+          <span className={`text-4xl font-black font-mono leading-none ${colorClass}`}>
+            {score > 0 ? `+${score}` : score}
+          </span>
+        </div>
+      </div>
+
+      <div className="relative pt-4 pb-2 overflow-visible">
+        {/* Track with gradient */}
+        <div className="h-2 w-full rounded-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 relative" />
+
+        {/* Labels below slider */}
+        <div className="flex justify-between text-[10px] text-slate-500 font-semibold mt-2.5 px-1 font-mono">
+          <span>Bearish (-100)</span>
+          <span>Trung lập (0)</span>
+          <span>Bullish (+100)</span>
+        </div>
+
+        {/* Pin indicating value */}
+        <div
+          className="absolute top-2 -ml-2.5 flex flex-col items-center transition-all duration-500 ease-out"
+          style={{ left: `${percentage}%` }}
+        >
+          {/* Pulsing glow circle indicator */}
+          <div className="relative flex h-5 w-5 items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40"></span>
+            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-white border-2 border-slate-900 shadow-[0_0_10px_rgba(255,255,255,0.8)]"></span>
+          </div>
+          {/* Small line pointer */}
+          <div className="w-0.5 h-2 bg-white/80 -mt-0.5 shadow-md" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ===== TAB PHÂN TÍCH TÂM LÝ TIN TỨC =====
+const SentimentAnalysisTab = ({ data, news, loading, onAnalyze, ticker }) => {
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-36 bg-slate-800/40 rounded-2xl border border-slate-700/30" />
+        <div className="p-5 bg-slate-900/10 rounded-2xl border border-slate-800/40 space-y-3">
+          <div className="h-4 bg-slate-800/60 rounded w-1/4 mb-4" />
+          <div className="h-3 bg-slate-800/40 rounded w-full animate-pulse" />
+          <div className="h-3 bg-slate-800/40 rounded w-11/12 animate-pulse" />
+          <div className="h-3 bg-slate-800/40 rounded w-4/5 animate-pulse" />
+          <div className="h-3 bg-slate-800/40 rounded w-3/4 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="glass-card p-8 text-center">
+        <div className="text-5xl mb-3">📰</div>
+        <h3 className="text-sm font-bold text-slate-300 mb-2">Chưa phân tích tâm lý tin tức</h3>
+        <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+          Tự động hoặc nhấn nút bên dưới để phân tích tâm lý của 10 tin tức CafeF mới nhất về {ticker}.
+        </p>
+        <button
+          onClick={onAnalyze}
+          className="px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all border border-cyan-500/30 bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25"
+        >
+          Phân tích ngay bằng AI
+        </button>
+      </div>
+    );
+  }
+
+  const { score, label, bullets, summary } = data;
+
+  return (
+    <div className="space-y-5 animate-fade-in-up">
+      {/* Gauge Slider */}
+      <SentimentGauge score={score} label={label} />
+
+      {/* AI Summary and Bullet points */}
+      <div className="glass-card p-5 space-y-4">
+        <div>
+          <h4 className="text-sm font-bold text-slate-200 mb-2 flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block" />
+            Đánh giá & Luận điểm của AI
+          </h4>
+          <p className="text-xs text-slate-400 leading-relaxed italic bg-slate-950/20 p-3 rounded-lg border border-slate-800/40">
+            "{summary}"
+          </p>
+        </div>
+
+        {bullets && bullets.length > 0 && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-semibold text-slate-400">Các yếu tố ảnh hưởng chính:</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {bullets.map((bullet, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-slate-800/30 text-xs text-slate-300 animate-fade-in-up"
+                >
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold font-mono mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <span className="flex-1 leading-normal font-medium">{bullet}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Real CafeF news feed list */}
+      <div className="glass-card p-5 space-y-3">
+        <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded bg-slate-500 inline-block" />
+          Tin tức CafeF thực tế ({news.length})
+        </h4>
+
+        {news.length === 0 ? (
+          <p className="text-xs text-slate-500 italic">Không có tin tức nào gần đây của mã này trên CafeF.</p>
+        ) : (
+          <div className="divide-y divide-slate-800/40 max-h-72 overflow-y-auto pr-1 space-y-1.5">
+            {news.map((item, index) => {
+              const fullUrl = item.url.startsWith('http')
+                ? item.url
+                : `https://cafef.vn${item.url.startsWith('/') ? '' : '/'}${item.url}`;
+              return (
+                <div key={index} className="pt-2 pb-2.5 hover:bg-slate-900/10 transition-all rounded px-2 group">
+                  <a
+                    href={fullUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-slate-300 hover:text-cyan-400 leading-snug transition-colors block cursor-pointer"
+                  >
+                    {item.title}
+                  </a>
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-500 font-medium">
+                    <span>CafeF</span>
+                    <span>•</span>
+                    <span className="font-mono">{item.time}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AnalyzePage = () => {
   const [result, setResult] = useState(null);
   const [currentParams, setCurrentParams] = useState(null);
@@ -251,6 +544,8 @@ const AnalyzePage = () => {
   const [compareTickers, setCompareTickers] = useState([]);
   const [compareInput, setCompareInput] = useState('');
   const [quarterlyData, setQuarterlyData] = useState(null);
+  const [sentimentData, setSentimentData] = useState(null);
+  const [sentimentLoading, setSentimentLoading] = useState(false);
 
   const [searchParams] = useSearchParams();
 
@@ -323,6 +618,7 @@ const AnalyzePage = () => {
     setResult(null);
     setCompareTickers([]); // Reset so sánh khi đổi mã chính
     setQuarterlyData(null);
+    setSentimentData(null); // Reset dữ liệu tâm lý khi đổi mã phân tích chính
 
     const [liveData] = await Promise.all([
       stock1.fetchAll(ticker, chartPeriod),
@@ -361,6 +657,71 @@ const AnalyzePage = () => {
     });
   }, [currentParams, settings.sources, handleAnalyze]);
 
+  const hasKey = (settings.apiKey && !settings.apiKey.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && settings.apiKey.trim() !== '' && settings.apiKey !== 'sk-ant-api03-' && settings.apiKey !== 'your_key_here') ||
+    (import.meta.env.VITE_ANTHROPIC_API_KEY && !import.meta.env.VITE_ANTHROPIC_API_KEY.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && import.meta.env.VITE_ANTHROPIC_API_KEY.trim() !== '' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'sk-ant-api03-' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'your_key_here');
+
+  const handleAnalyzeSentiment = useCallback(async () => {
+    if (!currentParams?.ticker) return;
+    if (sentimentLoading) return;
+    
+    setSentimentLoading(true);
+    
+    if (!hasKey) {
+      // Chế độ mô phỏng khi chưa nhập API key
+      setTimeout(() => {
+        setSentimentData(getMockSentiment(currentParams.ticker));
+        setSentimentLoading(false);
+        toast.success("Đã hoàn thành mô phỏng phân tích tâm lý tin tức!");
+      }, 800);
+      return;
+    }
+    
+    try {
+      const newsList = stock1.news || [];
+      const prompt = buildSentimentPrompt(currentParams.ticker, newsList);
+      
+      const aiResult = await analyze({
+        systemPrompt: STOCK_SENTIMENT_SYSTEM_PROMPT,
+        userPrompt: prompt,
+      });
+      
+      if (aiResult) {
+        const parsed = parseSentimentJson(aiResult);
+        if (parsed) {
+          setSentimentData(parsed);
+        } else {
+          setSentimentData({
+            score: 0,
+            label: 'NEUTRAL',
+            bullets: ['Không thể phân tích dữ liệu tin tức thành định dạng chuẩn.'],
+            summary: 'Đã xảy ra lỗi khi chuyển đổi kết quả phân tích AI thành cấu trúc dữ liệu.'
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error analyzing news sentiment:", err);
+      toast.error("Lỗi phân tích tâm lý tin tức!");
+    } finally {
+      setSentimentLoading(false);
+    }
+  }, [currentParams?.ticker, stock1.news, analyze, sentimentLoading, hasKey]);
+
+  // Tự động trigger phân tích tâm lý khi chuyển sang tab 'sentiment'
+  useEffect(() => {
+    if (infoTab === 'sentiment' && currentParams?.ticker && !sentimentData && !sentimentLoading) {
+      if (!hasKey) {
+        setSentimentLoading(true);
+        const timer = setTimeout(() => {
+          setSentimentData(getMockSentiment(currentParams.ticker));
+          setSentimentLoading(false);
+        }, 600);
+        return () => clearTimeout(timer);
+      } else {
+        handleAnalyzeSentiment();
+      }
+    }
+  }, [infoTab, currentParams?.ticker, sentimentData, sentimentLoading, hasKey, handleAnalyzeSentiment]);
+
   const handleSaveToHistory = useCallback(() => {
     if (!result || !currentParams) return;
 
@@ -383,9 +744,6 @@ const AnalyzePage = () => {
     updateSignal(currentParams.ticker, signal);
     toast.success('Đã lưu phân tích và cập nhật tín hiệu Watchlist!');
   }, [result, currentParams, stock1.info, addToHistory, updateSignal]);
-
-  const hasKey = (settings.apiKey && !settings.apiKey.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && settings.apiKey.trim() !== '' && settings.apiKey !== 'sk-ant-api03-' && settings.apiKey !== 'your_key_here') ||
-    (import.meta.env.VITE_ANTHROPIC_API_KEY && !import.meta.env.VITE_ANTHROPIC_API_KEY.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && import.meta.env.VITE_ANTHROPIC_API_KEY.trim() !== '' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'sk-ant-api03-' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'your_key_here');
 
   const isLoading = aiLoading || stock1.loading;
 
@@ -610,7 +968,7 @@ const AnalyzePage = () => {
             {result && (
               <div className="space-y-3">
                 <Tabs tabs={INFO_TABS} activeTab={infoTab} onChange={setInfoTab} />
-                {infoTab === 'result' ? (
+                {infoTab === 'result' && (
                   <ResultCard
                     result={result}
                     ticker={currentParams?.ticker}
@@ -620,10 +978,20 @@ const AnalyzePage = () => {
                     onSave={handleSaveToHistory}
                     onReanalyze={handleReanalyze}
                   />
-                ) : (
+                )}
+                {infoTab === 'fundamentals' && (
                   <div className="glass-card p-5">
                     <FundamentalsTab info={stock1.info} ticker={currentParams?.ticker} />
                   </div>
+                )}
+                {infoTab === 'sentiment' && (
+                  <SentimentAnalysisTab
+                    data={sentimentData}
+                    news={stock1.news}
+                    loading={sentimentLoading}
+                    onAnalyze={handleAnalyzeSentiment}
+                    ticker={currentParams?.ticker}
+                  />
                 )}
               </div>
             )}
