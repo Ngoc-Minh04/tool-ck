@@ -102,9 +102,17 @@ async def full_analysis(ticker: str = Query(...), period: str = "3mo"):
 
 @router.post("/backtest")
 async def backtest(body: BacktestRequest):
-    ohlcv_data = get_ohlcv(body.ticker, body.period)
-    result = compute_backtest(ohlcv_data, body.strategy, body.initial_capital)
-    return {"ticker": body.ticker, "strategy": body.strategy, **result}
+    try:
+        ohlcv_data = get_ohlcv(body.ticker, body.period)
+        result = compute_backtest(ohlcv_data, body.strategy, body.initial_capital)
+        return {"ticker": body.ticker, "strategy": body.strategy, **result}
+    except ValueError as ve:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        from fastapi import HTTPException
+        logger.error(f"Backtest error: {e}")
+        raise HTTPException(status_code=500, detail="Không thể chạy thử nghiệm chiến thuật.")
 
 
 @router.get("/support-resistance")

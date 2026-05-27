@@ -54,7 +54,7 @@ class Alert(AlertCreate):
 
 class BacktestRequest(BaseModel):
     ticker: str
-    strategy: Literal["ma_cross", "rsi", "macd"]
+    strategy: Literal["ma_cross", "rsi", "macd", "ma200", "bb_reversion"]
     period: str = "1y"
     initial_capital: float = 100_000_000
 
@@ -67,3 +67,8 @@ class BacktestResult(BaseModel):
     win_rate: float
     total_trades: int
     equity_curve: list
+    benchmark_return: float = 0.0
+    alpha: float = 0.0
+    buy_hold_curve: list = []
+    commission_paid: float = 0.0
+    trade_count_signal: int = 0

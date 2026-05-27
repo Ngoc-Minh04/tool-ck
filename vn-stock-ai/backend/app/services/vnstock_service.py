@@ -96,7 +96,7 @@ def Vnstock():
 
 
 def get_ohlcv(ticker: str, period: str = "3mo", interval: str = "1D") -> list:
-    period_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "3y": 1095}
+    period_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "3y": 1095}
     try:
         from vnstock.api.quote import Quote
         q = Quote(symbol=ticker.upper(), source="VCI")

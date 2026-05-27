@@ -89,13 +89,21 @@ def compute_indicators(ohlcv: List[dict]) -> dict:
 
 
 def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 100_000_000) -> dict:
-    """Simple backtest simulation"""
+    """Backtest simulation with Buy & Hold benchmark and transaction costs."""
+    COMMISSION = 0.0015  # 0.15% mỗi lệnh (thực tế HOSE ~0.15–0.25%)
+
+    if strategy == "ma200" and len(ohlcv) < 200:
+        raise ValueError("Dữ liệu lịch sử quá ngắn để tính toán đường trung bình MA200 (cần ít nhất 200 phiên, hãy chọn khung thời gian 1 Năm hoặc 2 Năm).")
+
     if len(ohlcv) < 50:
         return {"total_return": 0, "sharpe_ratio": 0, "max_drawdown": 0,
-                "win_rate": 0, "total_trades": 0, "equity_curve": []}
+                "win_rate": 0, "total_trades": 0, "equity_curve": [],
+                "benchmark_return": 0, "alpha": 0, "buy_hold_curve": [],
+                "commission_paid": 0, "trade_count_signal": 0}
 
     df = pd.DataFrame(ohlcv)
     df["close"] = pd.to_numeric(df["close"])
+    df["date"] = df["date"].astype(str).str[:10]
 
     try:
         try:
@@ -119,79 +127,133 @@ def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 
             df["signal"] = 0
             df.loc[df["macd_hist"] > 0, "signal"] = 1
             df.loc[df["macd_hist"] < 0, "signal"] = -1
-    except Exception:
+        elif strategy == "ma200":
+            df["ma200"] = ta.sma(df["close"], length=200)
+            df["signal"] = 0
+            df.loc[df["close"] > df["ma200"], "signal"] = 1
+            df.loc[df["close"] < df["ma200"], "signal"] = -1
+        elif strategy == "bb_reversion":
+            bb = ta.bbands(df["close"], length=20, std=2)
+            df["bb_upper"] = bb["BBU_20_2.0"]
+            df["bb_lower"] = bb["BBL_20_2.0"]
+            df["signal"] = 0
+            df.loc[df["close"] < df["bb_lower"], "signal"] = 1   # Chạm dải dưới → Mua
+            df.loc[df["close"] > df["bb_upper"], "signal"] = -1  # Chạm dải trên → Bán
+    except Exception as ex:
+        logger.warning(f"compute_backtest signal error: {ex}")
         df["signal"] = 0
 
+    # ── Buy & Hold benchmark ──────────────────────────────────────────────
+    first_price = df["close"].iloc[0]
+    bh_shares = int(initial_capital / first_price)
+    bh_cost = bh_shares * first_price * (1 + COMMISSION)
+    bh_cash = initial_capital - bh_cost
+    buy_hold_curve = []
+    for i, row in df.iterrows():
+        bh_equity = bh_cash + bh_shares * row["close"]
+        buy_hold_curve.append({"date": row["date"], "equity": float(round(bh_equity, 0))})
+    bh_final = buy_hold_curve[-1]["equity"] if buy_hold_curve else initial_capital
+    benchmark_return = round(((bh_final - initial_capital) / initial_capital) * 100, 2)
+
+    # ── Strategy simulation ───────────────────────────────────────────────
     logger.info(f"compute_backtest: strategy={strategy}, initial_capital={initial_capital}, data_points={len(df)}")
     capital = initial_capital
     position = 0
     trades = []
-    equity_curve = [{"date": str(ohlcv[0]["date"]), "equity": capital}]
+    commission_paid = 0.0
+    equity_curve = [{"date": df["date"].iloc[0], "equity": float(capital), "benchmark": float(round(buy_hold_curve[0]["equity"], 0))}]
 
     for i in range(1, len(df)):
         sig = df["signal"].iloc[i]
         price = df["close"].iloc[i]
-        prev_sig = df["signal"].iloc[i-1]
+        prev_sig = df["signal"].iloc[i - 1]
+        date_str = df["date"].iloc[i]
 
-        if sig == 1 and prev_sig != 1 and position == 0 and capital >= price:
-            shares = int(capital / price)
+        # BUY
+        if sig == 1 and prev_sig != 1 and position == 0 and capital > price:
+            cost_per_share = price * (1 + COMMISSION)
+            shares = int(capital / cost_per_share)
             if shares > 0:
+                total_cost = shares * cost_per_share
+                comm = shares * price * COMMISSION
+                commission_paid += comm
                 position = shares
-                capital -= shares * price
-                logger.info(f"BUY: date={df['date'].iloc[i]}, price={price}, shares={shares}, remaining_capital={capital}")
+                capital -= total_cost
+                logger.info(f"BUY: date={date_str}, price={price}, shares={shares}, commission={comm:.0f}, remaining={capital:.0f}")
                 trades.append({
-                    "date": str(df["date"].iloc[i])[:10],
+                    "date": date_str,
                     "type": "buy",
-                    "price": price,
-                    "shares": shares
+                    "price": float(price),
+                    "shares": int(shares),
+                    "commission": float(round(comm, 0))
                 })
+
+        # SELL
         elif sig == -1 and position > 0:
-            revenue = position * price
-            entry_cost = trades[-1]["price"] * trades[-1]["shares"] if trades else 0
-            pnl = revenue - entry_cost
-            logger.info(f"SELL: date={df['date'].iloc[i]}, price={price}, shares={position}, revenue={revenue}, pnl={pnl}")
+            gross_revenue = position * price
+            comm = gross_revenue * COMMISSION
+            commission_paid += comm
+            net_revenue = gross_revenue - comm
+            buy_trade = next((t for t in reversed(trades) if t["type"] == "buy"), None)
+            entry_cost = buy_trade["price"] * buy_trade["shares"] if buy_trade else 0
+            pnl = net_revenue - entry_cost
+            logger.info(f"SELL: date={date_str}, price={price}, shares={position}, net_revenue={net_revenue:.0f}, pnl={pnl:.0f}")
             trades.append({
-                "date": str(df["date"].iloc[i])[:10],
+                "date": date_str,
                 "type": "sell",
-                "price": price,
-                "pnl": pnl,
-                "shares": position
+                "price": float(price),
+                "pnl": float(round(pnl, 0)),
+                "shares": int(position),
+                "commission": float(round(comm, 0))
             })
-            capital += revenue
+            capital += net_revenue
             position = 0
 
         total_value = capital + position * price
-        equity_curve.append({"date": str(df["date"].iloc[i])[:10], "equity": round(total_value, 0)})
+        bh_eq = buy_hold_curve[i]["equity"] if i < len(buy_hold_curve) else bh_final
+        equity_curve.append({
+            "date": date_str,
+            "equity": float(round(total_value, 0)),
+            "benchmark": float(round(bh_eq, 0))
+        })
 
-    logger.info(f"compute_backtest finish: final_equity={equity_curve[-1]['equity']}, total_trades={len(trades)}")
+    logger.info(f"compute_backtest finish: final_equity={equity_curve[-1]['equity']}, trades={len(trades)}, commission_paid={commission_paid:.0f}")
+
     final_equity = equity_curve[-1]["equity"] if equity_curve else initial_capital
-    total_return = ((final_equity - initial_capital) / initial_capital) * 100
+    total_return = round(((final_equity - initial_capital) / initial_capital) * 100, 2)
+    alpha = round(total_return - benchmark_return, 2)
 
     sell_trades = [t for t in trades if t["type"] == "sell"]
     win_trades = [t for t in sell_trades if t.get("pnl", 0) > 0]
-    win_rate = len(win_trades) / max(len(sell_trades), 1) * 100
+    win_rate = round(len(win_trades) / max(len(sell_trades), 1) * 100, 1)
 
     equities = [e["equity"] for e in equity_curve]
-    max_dd = 0
+    max_dd = 0.0
     peak = equities[0]
     for e in equities:
         if e > peak:
             peak = e
-        dd = (peak - e) / peak * 100
+        dd = (peak - e) / peak * 100 if peak > 0 else 0
         if dd > max_dd:
             max_dd = dd
 
     returns = pd.Series(equities).pct_change().dropna()
-    sharpe = (returns.mean() / returns.std() * (252 ** 0.5)) if returns.std() > 0 else 0
+    sharpe = float(returns.mean() / returns.std() * (252 ** 0.5)) if returns.std() > 0 else 0.0
 
+    step = max(1, len(equity_curve) // 200)
     return {
-        "total_return": round(total_return, 2),
-        "sharpe_ratio": round(float(sharpe), 3),
-        "max_drawdown": round(max_dd, 2),
-        "win_rate": round(win_rate, 1),
-        "total_trades": len(sell_trades),
+        "total_return": float(total_return),
+        "sharpe_ratio": float(round(sharpe, 3)),
+        "max_drawdown": float(round(max_dd, 2)),
+        "win_rate": float(win_rate),
+        "total_trades": int(len(sell_trades)),
         "trades": trades,
-        "equity_curve": equity_curve[::max(1, len(equity_curve)//200)],  # Downsample
+        "equity_curve": equity_curve[::step],
+        "benchmark_return": float(benchmark_return),
+        "alpha": float(alpha),
+        "buy_hold_curve": buy_hold_curve[::step],
+        "commission_paid": float(round(commission_paid, 0)),
+        "trade_count_signal": int(len(trades)),
     }
 
 
