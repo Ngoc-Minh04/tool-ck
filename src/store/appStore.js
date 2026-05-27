@@ -17,6 +17,7 @@ const useAppStore = create(
         defaultExchange: 'HOSE',
         defaultTimeframe: 'T3',
         sources: DATA_SOURCES,
+        googleSearch: true,
       },
 
       updateSettings: (updates) =>

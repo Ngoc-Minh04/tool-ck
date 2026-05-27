@@ -115,6 +115,43 @@ const SettingsPage = () => {
             </div>
           </SettingsSection>
 
+          {/* Tìm kiếm trực tuyến */}
+          <SettingsSection icon={Globe} title="Tìm kiếm trực tuyến">
+            <div
+              className="flex items-center justify-between p-3 rounded-lg"
+              style={{
+                background: settings.googleSearch ? 'rgba(79,195,247,0.05)' : 'rgba(13,27,42,0.5)',
+                border: `1px solid ${settings.googleSearch ? 'rgba(79,195,247,0.2)' : 'rgba(79,195,247,0.08)'}`,
+              }}
+            >
+              <div>
+                <div className="text-sm font-medium text-slate-200">Tìm kiếm Google (Google Search Grounding)</div>
+                <div className="text-xs text-slate-500">Cho phép Gemini tự động tìm kiếm trực tuyến để trả lời tin tức, giá cả thời gian thực năm 2026.</div>
+              </div>
+              <button
+                onClick={() => updateSettings({ googleSearch: !settings.googleSearch })}
+                className="relative inline-flex items-center cursor-pointer border-none bg-transparent"
+              >
+                <div
+                  className="w-10 h-5 rounded-full transition-all duration-200"
+                  style={{
+                    background: settings.googleSearch ? '#4fc3f7' : '#1a2f45',
+                    border: '1px solid rgba(79,195,247,0.1)',
+                  }}
+                >
+                  <div
+                    className="absolute top-0.5 w-4 h-4 rounded-full transition-all duration-200"
+                    style={{
+                      background: '#fff',
+                      left: settings.googleSearch ? '22px' : '2px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                    }}
+                  />
+                </div>
+              </button>
+            </div>
+          </SettingsSection>
+
           {/* Nguồn dữ liệu */}
           <SettingsSection icon={Globe} title="Nguồn dữ liệu mặc định">
             <div className="space-y-2">

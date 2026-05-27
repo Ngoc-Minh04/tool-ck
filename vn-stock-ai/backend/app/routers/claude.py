@@ -45,16 +45,26 @@ def _get_claude_headers(key: str) -> dict:
 
 
 async def _call_gemini(key: str, body: dict, stream: bool):
-    gemini_model = "gemini-2.5-flash"
     body_model = body.get("model", "")
-    if "haiku" in body_model:
-        gemini_model = "gemini-2.5-flash"
-    elif "opus" in body_model or "sonnet" in body_model:
-        gemini_model = "gemini-3.5-flash"
+    if "gemini-" in body_model:
+        gemini_model = body_model
+        if gemini_model == "gemini-3.0-flash":
+            gemini_model = "gemini-3-flash-preview"
+    else:
+        # Fallback mapping for Claude models when using Gemini API Key
+        gemini_model = "gemini-2.0-flash"
+        if "haiku" in body_model:
+            gemini_model = "gemini-2.0-flash"
+        elif "sonnet" in body_model:
+            gemini_model = "gemini-2.0-flash"
+        elif "opus" in body_model:
+            gemini_model = "gemini-3.5-flash"
 
     gemini_body = {
-        "contents": []
+        "contents": [],
     }
+    if body.get("google_search", False):
+        gemini_body["tools"] = [{"google_search": {}}]
     if body.get("system"):
         gemini_body["systemInstruction"] = {
             "parts": [{"text": body.get("system")}]
@@ -72,6 +82,12 @@ async def _call_gemini(key: str, body: dict, stream: bool):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:streamGenerateContent?alt=sse&key={key}"
             async with httpx.AsyncClient(timeout=120) as client:
                 async with client.stream("POST", url, json=gemini_body) as r:
+                    if r.status_code != 200:
+                        err_content = await r.aread()
+                        logger.error(f"Gemini API returned status {r.status_code}: {err_content.decode('utf-8', errors='ignore')}")
+                        yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': f'Lỗi kết nối Gemini API ({r.status_code}).'}})}\n\n".encode("utf-8")
+                        yield b"data: [DONE]\n\n"
+                        return
                     buffer = ""
                     async for chunk in r.aiter_text():
                         buffer += chunk
@@ -270,7 +286,7 @@ async def test_key(request: Request):
             return {"ok": False, "error": "Chưa cung cấp API Key"}
             
         if provider == "gemini":
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
             test_body = {"contents": [{"parts": [{"text": "Ping"}]}]}
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.post(url, json=test_body)

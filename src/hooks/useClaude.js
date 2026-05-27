@@ -26,6 +26,7 @@ const useClaude = () => {
           systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
           maxTokens: 4096,
+          googleSearch: settings.googleSearch,
         });
 
         if (onSuccess) onSuccess(result);
@@ -40,7 +41,7 @@ const useClaude = () => {
         setLoading(false);
       }
     },
-    [settings.apiKey, settings.model]
+    [settings.apiKey, settings.model, settings.googleSearch]
   );
 
   /**
@@ -58,6 +59,7 @@ const useClaude = () => {
           systemPrompt,
           messages,
           maxTokens: 2048,
+          googleSearch: settings.googleSearch,
         });
 
         if (onSuccess) onSuccess(result);
@@ -72,7 +74,7 @@ const useClaude = () => {
         setLoading(false);
       }
     },
-    [settings.apiKey, settings.model]
+    [settings.apiKey, settings.model, settings.googleSearch]
   );
 
   return { loading, error, analyze, chat, clearError: () => setError(null) };

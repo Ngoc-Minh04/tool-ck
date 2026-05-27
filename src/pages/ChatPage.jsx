@@ -1,7 +1,7 @@
 // ===== TRANG CHAT VỚI AI =====
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Plus, Trash2, MessageSquare } from 'lucide-react';
+import { Send, Plus, Trash2, MessageSquare, Globe } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import MessageBubble from '../components/Chat/MessageBubble';
 import QuickPrompts from '../components/Chat/QuickPrompts';
@@ -25,6 +25,8 @@ const ChatPage = () => {
     setCurrentChat,
     getCurrentChat,
   } = useAppStore();
+  const settings = useAppStore((s) => s.settings);
+  const updateSettings = useAppStore((s) => s.updateSettings);
 
   const currentSession = getCurrentChat();
 
@@ -184,7 +186,23 @@ const ChatPage = () => {
           className="p-4 space-y-3"
           style={{ borderTop: '1px solid rgba(79,195,247,0.08)', background: 'rgba(13,27,42,0.5)' }}
         >
-          <QuickPrompts onSelect={(text) => handleSend(text)} disabled={loading} />
+          <div className="flex flex-wrap justify-between items-center gap-2">
+            <QuickPrompts onSelect={(text) => handleSend(text)} disabled={loading} />
+            
+            <button
+              onClick={() => updateSettings({ googleSearch: !settings.googleSearch })}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-slate-300 hover:text-cyan-400 text-xs border bg-transparent"
+              style={{
+                borderColor: settings.googleSearch ? 'rgba(79,195,247,0.3)' : 'rgba(79,195,247,0.08)',
+                background: settings.googleSearch ? 'rgba(79,195,247,0.1)' : 'rgba(13,27,42,0.4)',
+              }}
+              title={settings.googleSearch ? 'Tắt Tìm kiếm Google' : 'Bật Tìm kiếm Google'}
+            >
+              <Globe size={13} className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'} />
+              <span>Tìm kiếm Google: <strong className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'}>{settings.googleSearch ? 'BẬT' : 'TẮT'}</strong></span>
+            </button>
+          </div>
 
           <div className="flex gap-3">
             <textarea
