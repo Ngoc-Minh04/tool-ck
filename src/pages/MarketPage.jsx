@@ -29,7 +29,7 @@ const Sparkline = ({ open, high, low, price, ref: refPrice }) => {
   const maxV = Math.max(...pts);
   const range = maxV - minV || 1;
   const w = 48, h = 18, pad = 1.5;
-  const xs = [0, 1, 2, 3].map(i => pad + (i / 3) * (w - pad * 2));
+  const xs = pts.map((_, i) => pad + (i / Math.max(pts.length - 1, 1)) * (w - pad * 2));
   const ys = pts.map(v => h - pad - ((v - minV) / range) * (h - pad * 2));
   const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
   const isUp = price >= (refPrice || open);
@@ -117,16 +117,42 @@ const MarketPage = () => {
   const [quotesState, setQuotesState] = useState(fallbackQuotes);
   const [flashStates, setFlashStates] = useState({});
 
+  // Kiểm tra thời gian hoạt động của thị trường chứng khoán Việt Nam
+  const checkMarket = useCallback(() => {
+    const now = new Date();
+    const day = now.getDay(); // 0=CN, 1=T2...6=T7
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const timeInMinutes = hours * 60 + minutes;
+    
+    // GTM+7:
+    // - Thứ Hai đến thứ Sáu (day >= 1 && day <= 5)
+    // - Phiên Sáng: 09:00 - 11:30 (540 phút đến 690 phút)
+    // - Phiên Chiều: 13:00 - 15:15 (780 phút đến 915 phút)
+    const isWeekday = day >= 1 && day <= 5;
+    const isMorning = timeInMinutes >= 540 && timeInMinutes <= 690;
+    const isAfternoon = timeInMinutes >= 780 && timeInMinutes <= 915;
+    
+    return isWeekday && (isMorning || isAfternoon);
+  }, []);
+
   const loadData = useCallback(async () => {
     const data = await fetchMarket();
     if (data) setMarketData(data);
   }, [fetchMarket]);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 40000); // Tải dữ liệu thật mỗi 40 giây (tối ưu hóa cực hạn)
+    loadData(); // Tải lần đầu tiên khi mount
+    
+    const checkAndLoad = () => {
+      if (checkMarket()) {
+        loadData();
+      }
+    };
+    
+    const interval = setInterval(checkAndLoad, 40000); // Tải dữ liệu thật mỗi 40 giây (tối ưu hóa cực hạn)
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [loadData, checkMarket]);
 
   const togglePin = useCallback((ticker) => {
     setPinnedTickers(prev => {
@@ -140,18 +166,8 @@ const MarketPage = () => {
 
   // Lấy dữ liệu thực từ sàn cho toàn bộ 15 mã cổ phiếu mỗi 1.5 giây
   useEffect(() => {
-    const checkMarket = () => {
-      const now = new Date();
-      const day = now.getDay(); // 0=CN, 1=T2...6=T7
-      const hours = now.getHours();
-      const minutes = now.getMinutes();
-      const timeInMinutes = hours * 60 + minutes;
-      // GTM+7: 9:00 = 540, 15:15 = 915
-      return day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 915;
-    };
-
     const updateQuotes = async (isInitial = false) => {
-      // Nếu không phải lần đầu tiên và thị trường đóng cửa thì không gửi request để tiết kiệm
+      // Nếu không phải lần đầu tiên và thị trường đóng cửa thì ngưng gửi request
       if (!isInitial && !checkMarket()) return;
 
       try {
@@ -204,9 +220,13 @@ const MarketPage = () => {
     // Tải dữ liệu thực lần đầu ngay khi mount (kể cả ngoài giờ giao dịch để hiển thị giá đóng cửa phiên cuối)
     updateQuotes(true);
 
-    const timer = setInterval(() => updateQuotes(false), 1500);
+    const timer = setInterval(() => {
+      if (checkMarket()) {
+        updateQuotes(false);
+      }
+    }, 1500);
     return () => clearInterval(timer);
-  }, [fetchQuickQuotes]);
+  }, [fetchQuickQuotes, checkMarket]);
 
   // 1. Lọc theo tìm kiếm + ngành trực tiếp từ quotesState
   let filtered = quotesState.filter(row => {

@@ -24,6 +24,36 @@ import pandas as pd
 from loguru import logger
 import random
 from datetime import date, timedelta
+import os
+import json
+
+CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "market_cache.json")
+
+def _write_cache(key: str, data):
+    cache = {}
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                cache = json.load(f)
+        except Exception:
+            pass
+    cache[key] = data
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Write cache error: {e}")
+
+def _read_cache(key: str, default=None):
+    if not os.path.exists(CACHE_FILE):
+        return default
+    try:
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+            return cache.get(key, default)
+    except Exception as e:
+        logger.error(f"Read cache error: {e}")
+        return default
 
 
 def _get_vnstock():
@@ -200,13 +230,30 @@ def get_market_overview() -> list:
                     "advance": breadth["advance"],
                     "decline": breadth["decline"],
                     "unchanged": breadth["unchanged"],
+                    "is_live": True
                 }
         except BaseException as idx_err:
             logger.error(f"Market index {idx} error: {idx_err}")
+        
+        # Đọc từ cache trước khi fallback sang mock
+        cached_indices = _read_cache("indices", [])
+        if cached_indices:
+            for ci in cached_indices:
+                if ci.get("index") == idx:
+                    ci_copy = ci.copy()
+                    ci_copy["is_live"] = False
+                    return ci_copy
+                    
         return _mock_index(idx)
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         result = list(executor.map(fetch_index, indices))
+    
+    # Cập nhật cache nếu có dữ liệu thật
+    has_live = any(r.get("is_live") for r in result)
+    if has_live:
+        _write_cache("indices", result)
+        
     return result
 
 
@@ -351,8 +398,13 @@ def get_foreign_flow(df = None) -> list:
     # Kiểm tra xem có dữ liệu giao dịch thực tế không (tổng giá trị mua/bán > 0)
     has_live_data = len(results) > 0 and sum(abs(r["buy_value"]) + abs(r["sell_value"]) for r in results) > 0
     if has_live_data:
+        _write_cache("foreign", results)
         _last_foreign_flow = results
         return results
+        
+    cached_foreign = _read_cache("foreign")
+    if cached_foreign:
+        return cached_foreign
         
     if _last_foreign_flow:
         return _last_foreign_flow
@@ -594,12 +646,25 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     except BaseException as e:
         logger.warning(f"Failed to fetch live quotes batch: {e}")
 
+    # Ghi nhận kết quả live thành công vào cache
+    live_results = {r["ticker"]: r for r in results if r.get("is_live")}
+    if live_results:
+        cached_quotes = _read_cache("quotes", {})
+        cached_quotes.update(live_results)
+        _write_cache("quotes", cached_quotes)
+
     # Điền bổ sung các mã bị thiếu hoặc lỗi bằng cache hoặc mock
     fetched_tickers = {r["ticker"] for r in results}
+    cached_quotes = _read_cache("quotes", {})
     for ticker in tickers:
         if ticker not in fetched_tickers:
             if ticker in _last_live_quotes:
                 results.append(_last_live_quotes[ticker])
+            elif ticker in cached_quotes:
+                # Đảm bảo trả về dữ liệu cache dạng offline (is_live=False để client phân biệt)
+                q_copy = cached_quotes[ticker].copy()
+                q_copy["is_live"] = False
+                results.append(q_copy)
             else:
                 fb = fallbacks.get(ticker, {
                     "ticker": ticker,
