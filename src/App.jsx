@@ -11,6 +11,7 @@ import SettingsPage from './pages/SettingsPage';
 import WatchlistPage from './pages/WatchlistPage';
 import ScreenerPage from './pages/ScreenerPage';
 import AlertsPage from './pages/AlertsPage';
+import ScannerPage from './pages/ScannerPage';
 import OnboardingModal from './components/UI/OnboardingModal';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 
@@ -70,6 +71,7 @@ function AppInner() {
           <Route path="/chat"     element={<ChatPage />} />
           <Route path="/history"  element={<HistoryPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
+          <Route path="/scanner"  element={<ScannerPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/analyze" replace />} />
         </Routes>

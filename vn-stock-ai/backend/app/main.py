@@ -23,7 +23,7 @@ sys.stderr = SafeStreamWrapper(sys.stderr)
 import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import stock, market, screener, alerts
+from app.routers import stock, market, screener, alerts, scanner as scanner_router
 from app.routers import claude as claude_router
 from app.config import settings
 from app.tasks.alert_scheduler import start_scheduler, scheduler
@@ -67,6 +67,7 @@ app.include_router(market.router, prefix="/market", tags=["Market"])
 app.include_router(screener.router, prefix="/screener", tags=["Screener"])
 app.include_router(alerts.router, prefix="/alerts", tags=["Alerts"])
 app.include_router(claude_router.router, prefix="/claude", tags=["Claude AI"])
+app.include_router(scanner_router.router, prefix="/scanner", tags=["Auto Scanner"])
 
 
 @app.on_event("startup")
@@ -81,6 +82,9 @@ async def startup():
             
     await init_redis(settings.REDIS_URL)
     start_scheduler()
+    # Tải trước OHLCV 60 mã VN100 vào cache nền để lần scan đầu tiên nhanh hơn
+    from app.services.scanner_service import preload_ohlcv
+    preload_ohlcv()
     logger.info("API ready at http://localhost:8000")
 
 

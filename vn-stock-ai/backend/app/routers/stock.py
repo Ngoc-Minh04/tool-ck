@@ -2,11 +2,33 @@ from fastapi import APIRouter, Query
 import httpx
 from app.services.vnstock_service import get_ohlcv, get_stock_info, get_quarterly_financials, Vnstock
 from app.services.indicator_service import compute_indicators, compute_backtest, compute_support_resistance
+from app.services.prediction_service import predict_price_prophet
 from app.services.cache_service import cache_get, cache_set
 from app.models.schemas import BacktestRequest
 from loguru import logger
 
 router = APIRouter()
+
+
+@router.get("/predict")
+async def predict(ticker: str = Query(...), periods: int = 10):
+    """Dự đoán giá N phiên tiếp theo dùng mô hình Prophet (không tốn request thêm)."""
+    key = f"predict:{ticker.upper()}:{periods}"
+    cached = await cache_get(key)
+    if cached:
+        return cached
+    from fastapi.concurrency import run_in_threadpool
+    ohlcv_data = await run_in_threadpool(get_ohlcv, ticker, "1y", "1D")
+    result = await run_in_threadpool(predict_price_prophet, ohlcv_data, periods)
+    result["ticker"] = ticker.upper()
+    await cache_set(key, result, ttl=3600)  # Cache 1 giờ
+    return result
+
+
+@router.get("/{ticker}/predict")
+async def predict_path(ticker: str, periods: int = 10):
+    return await predict(ticker=ticker, periods=periods)
+
 
 
 @router.get("/{ticker}/ohlcv")

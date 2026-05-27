@@ -87,6 +87,27 @@ const getTickSize = (price, exchange) => {
   return 100;
 };
 
+// ===== FALLBACK DATA =====
+const fallbackQuotes = [
+  { ticker: 'VCB', exchange: 'HOSE', price: 85200, change: 400, pct: 0.47, vol: 2140, cap: '530.6T', ref: 84800, ceil: 90700, floor: 78900, high: 85500, low: 84500, open: 84800 },
+  { ticker: 'BID', exchange: 'HOSE', price: 42500, change: -300, pct: -0.70, vol: 3560, cap: '245T', ref: 42800, ceil: 45750, floor: 39850, high: 43000, low: 42400, open: 42800 },
+  { ticker: 'CTG', exchange: 'HOSE', price: 28700, change: 100, pct: 0.35, vol: 4210, cap: '185T', ref: 28600, ceil: 30600, floor: 26600, high: 28900, low: 28500, open: 28600 },
+  { ticker: 'FPT', exchange: 'HOSE', price: 132000, change: 1500, pct: 1.15, vol: 1870, cap: '145T', ref: 130500, ceil: 139600, floor: 121400, high: 132500, low: 130000, open: 130500 },
+  { ticker: 'HPG', exchange: 'HOSE', price: 24600, change: -500, pct: -1.99, vol: 8940, cap: '140T', ref: 25100, ceil: 26850, floor: 23350, high: 25200, low: 24500, open: 25100 },
+  { ticker: 'VIC', exchange: 'HOSE', price: 38900, change: 200, pct: 0.52, vol: 1230, cap: '135T', ref: 38700, ceil: 41400, floor: 36000, high: 39100, low: 38600, open: 38700 },
+  { ticker: 'VNM', exchange: 'HOSE', price: 68500, change: -200, pct: -0.29, vol: 980, cap: '125T', ref: 68700, ceil: 73500, floor: 63900, high: 69000, low: 68300, open: 68700 },
+  { ticker: 'ACB', exchange: 'HOSE', price: 24800, change: 300, pct: 1.22, vol: 5670, cap: '95T', ref: 24500, ceil: 26200, floor: 22800, high: 24900, low: 24450, open: 24500 },
+  { ticker: 'MBB', exchange: 'HOSE', price: 26500, change: 200, pct: 0.76, vol: 6120, cap: '115T', ref: 26300, ceil: 28100, floor: 24500, high: 26600, low: 26200, open: 26300 },
+  { ticker: 'TCB', exchange: 'HOSE', price: 32100, change: -100, pct: -0.31, vol: 3450, cap: '175T', ref: 32200, ceil: 34450.0, floor: 30000.0, high: 32400.0, low: 32000.0, open: 32200.0 },
+  { ticker: 'SSI', exchange: 'HOSE', price: 28500, change: -600, pct: -2.06, vol: 4300, cap: '43T', ref: 29100, ceil: 31100, floor: 27100, high: 29200, low: 28400, open: 29100 },
+  { ticker: 'MWG', exchange: 'HOSE', price: 55000, change: 800, pct: 1.48, vol: 2200, cap: '80T', ref: 54200, ceil: 58000, floor: 50400, high: 55400, low: 54200, open: 54200 },
+  { ticker: 'GAS', exchange: 'HOSE', price: 72000, change: 100, pct: 0.14, vol: 680, cap: '165T', ref: 71900, ceil: 76900, floor: 66900, high: 72300, low: 71800, open: 71900 },
+  { ticker: 'VHM', exchange: 'HOSE', price: 39500, change: -400, pct: -1.00, vol: 2800, cap: '172T', ref: 39900, ceil: 42700, floor: 37100, high: 40100, low: 39400, open: 39900 },
+  { ticker: 'VRE', exchange: 'HOSE', price: 22500, change: 300, pct: 1.35, vol: 1950, cap: '51T', ref: 22200, ceil: 23750, floor: 20650, high: 22700, low: 22150, open: 22200 },
+];
+
+const LS_QUOTES_KEY = 'vn_stock_last_quotes';
+
 // ===== MAIN COMPONENT =====
 const MarketPage = () => {
   const [marketData, setMarketData] = useState(null);
@@ -95,26 +116,28 @@ const MarketPage = () => {
   const [selectedSector, setSelectedSector] = useState('Tất cả');
   const { loading, fetchMarket, fetchQuickQuotes } = useVnStock();
 
-  // ===== FALLBACK DATA =====
-  const fallbackQuotes = [
-    { ticker: 'VCB', exchange: 'HOSE', price: 85200, change: 400, pct: 0.47, vol: 2140, cap: '530.6T', ref: 84800, ceil: 90700, floor: 78900, high: 85500, low: 84500, open: 84800 },
-    { ticker: 'BID', exchange: 'HOSE', price: 42500, change: -300, pct: -0.70, vol: 3560, cap: '245T', ref: 42800, ceil: 45750, floor: 39850, high: 43000, low: 42400, open: 42800 },
-    { ticker: 'CTG', exchange: 'HOSE', price: 28700, change: 100, pct: 0.35, vol: 4210, cap: '185T', ref: 28600, ceil: 30600, floor: 26600, high: 28900, low: 28500, open: 28600 },
-    { ticker: 'FPT', exchange: 'HOSE', price: 132000, change: 1500, pct: 1.15, vol: 1870, cap: '145T', ref: 130500, ceil: 139600, floor: 121400, high: 132500, low: 130000, open: 130500 },
-    { ticker: 'HPG', exchange: 'HOSE', price: 24600, change: -500, pct: -1.99, vol: 8940, cap: '140T', ref: 25100, ceil: 26850, floor: 23350, high: 25200, low: 24500, open: 25100 },
-    { ticker: 'VIC', exchange: 'HOSE', price: 38900, change: 200, pct: 0.52, vol: 1230, cap: '135T', ref: 38700, ceil: 41400, floor: 36000, high: 39100, low: 38600, open: 38700 },
-    { ticker: 'VNM', exchange: 'HOSE', price: 68500, change: -200, pct: -0.29, vol: 980, cap: '125T', ref: 68700, ceil: 73500, floor: 63900, high: 69000, low: 68300, open: 68700 },
-    { ticker: 'ACB', exchange: 'HOSE', price: 24800, change: 300, pct: 1.22, vol: 5670, cap: '95T', ref: 24500, ceil: 26200, floor: 22800, high: 24900, low: 24450, open: 24500 },
-    { ticker: 'MBB', exchange: 'HOSE', price: 26500, change: 200, pct: 0.76, vol: 6120, cap: '115T', ref: 26300, ceil: 28100, floor: 24500, high: 26600, low: 26200, open: 26300 },
-    { ticker: 'TCB', exchange: 'HOSE', price: 32100, change: -100, pct: -0.31, vol: 3450, cap: '175T', ref: 32200, ceil: 34450.0, floor: 30000.0, high: 32400.0, low: 32000.0, open: 32200.0 },
-    { ticker: 'SSI', exchange: 'HOSE', price: 28500, change: -600, pct: -2.06, vol: 4300, cap: '43T', ref: 29100, ceil: 31100, floor: 27100, high: 29200, low: 28400, open: 29100 },
-    { ticker: 'MWG', exchange: 'HOSE', price: 55000, change: 800, pct: 1.48, vol: 2200, cap: '80T', ref: 54200, ceil: 58000, floor: 50400, high: 55400, low: 54200, open: 54200 },
-    { ticker: 'GAS', exchange: 'HOSE', price: 72000, change: 100, pct: 0.14, vol: 680, cap: '165T', ref: 71900, ceil: 76900, floor: 66900, high: 72300, low: 71800, open: 71900 },
-    { ticker: 'VHM', exchange: 'HOSE', price: 39500, change: -400, pct: -1.00, vol: 2800, cap: '172T', ref: 39900, ceil: 42700, floor: 37100, high: 40100, low: 39400, open: 39900 },
-    { ticker: 'VRE', exchange: 'HOSE', price: 22500, change: 300, pct: 1.35, vol: 1950, cap: '51T', ref: 22200, ceil: 23750, floor: 20650, high: 22700, low: 22150, open: 22200 },
-  ];
+  const [quotesState, setQuotesState] = useState(() => {
+    try {
+      const cached = localStorage.getItem(LS_QUOTES_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load cached quotes", e);
+    }
+    return fallbackQuotes;
+  });
 
-  const [quotesState, setQuotesState] = useState(fallbackQuotes);
+  const [dataSource, setDataSource] = useState(() => {
+    try {
+      const cached = localStorage.getItem(LS_QUOTES_KEY);
+      if (cached && JSON.parse(cached).length > 0) return 'cache';
+    } catch {}
+    return 'fallback';
+  });
   const [flashStates, setFlashStates] = useState({});
 
   // Kiểm tra thời gian hoạt động của thị trường chứng khoán Việt Nam
@@ -172,7 +195,11 @@ const MarketPage = () => {
 
       try {
         const liveData = await fetchQuickQuotes('VCB,BID,CTG,FPT,HPG,VIC,VNM,ACB,MBB,TCB,SSI,MWG,GAS,VHM,VRE');
-        if (!liveData || !liveData.length) return;
+        if (!liveData || !liveData.length) {
+          // Khi lỗi tải/mất kết nối mạng, hiển thị Offline nếu đã có cache
+          setDataSource(prev => (prev === 'live' ? 'cache' : prev));
+          return;
+        }
 
         setQuotesState(prev => {
           if (!prev.length) return prev;
@@ -214,6 +241,7 @@ const MarketPage = () => {
         });
       } catch (err) {
         console.error("Failed to fetch live quotes:", err);
+        setDataSource(prev => (prev === 'live' ? 'cache' : prev));
       }
     };
 
@@ -228,6 +256,25 @@ const MarketPage = () => {
     return () => clearInterval(timer);
   }, [fetchQuickQuotes, checkMarket]);
 
+  // Tự động lưu cache và cập nhật nguồn dữ liệu khi quotesState thay đổi
+  useEffect(() => {
+    const isStillFallback = quotesState.every((q, idx) => {
+      const fb = fallbackQuotes[idx];
+      return fb && q.ticker === fb.ticker && q.price === fb.price && q.is_live === undefined;
+    });
+
+    if (!isStillFallback) {
+      const anyLive = quotesState.some(q => q.is_live);
+      setDataSource(anyLive ? 'live' : 'cache');
+      
+      try {
+        localStorage.setItem(LS_QUOTES_KEY, JSON.stringify(quotesState));
+      } catch (e) {
+        console.error("Failed to save quotes cache to localStorage", e);
+      }
+    }
+  }, [quotesState]);
+
   // 1. Lọc theo tìm kiếm + ngành trực tiếp từ quotesState
   let filtered = quotesState.filter(row => {
     const matchSearch = !searchQuery || row.ticker.toLowerCase().includes(searchQuery.toLowerCase());
@@ -241,7 +288,6 @@ const MarketPage = () => {
   unpinned.sort((a, b) => (b.pct || 0) - (a.pct || 0));
   const quotes = [...pinned, ...unpinned];
 
-  const isMockData = quotesState.every(q => !q.is_live);
   const sectors = getSectorData(quotesState);
 
   return (
@@ -276,11 +322,27 @@ const MarketPage = () => {
           <div className="lg:col-span-8 order-1 lg:order-1 glass-card p-4">
             {/* Header bảng */}
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h3 className="text-xs font-semibold text-slate-200">
-                🗺️ Bảng giá nhanh
-                {isMockData && <span className="ml-2 text-[10px] text-yellow-500 font-normal">(Dữ liệu mẫu)</span>}
+              <h3 className="text-xs font-semibold text-slate-200 flex items-center gap-2 flex-wrap">
+                <span>🗺️ Bảng giá nhanh</span>
+                {dataSource === 'live' && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[10px] font-normal border border-green-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                    Trực tuyến
+                  </span>
+                )}
+                {dataSource === 'cache' && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[10px] font-normal border border-amber-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    Ngoại tuyến (Xem giá gần nhất)
+                  </span>
+                )}
+                {dataSource === 'fallback' && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 text-[10px] font-normal border border-red-500/20">
+                    Dữ liệu mẫu
+                  </span>
+                )}
                 {pinnedTickers.length > 0 && (
-                  <span className="ml-2 text-[10px] text-amber-400 font-normal">
+                  <span className="text-[10px] text-amber-400 font-normal ml-auto">
                     📌 {pinnedTickers.length} mã đã ghim
                   </span>
                 )}

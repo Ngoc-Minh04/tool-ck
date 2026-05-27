@@ -1,17 +1,66 @@
 // ===== TRANG QUẢN LÝ CẢNH BÁO GIÁ =====
 
-import { useState, useEffect, useCallback } from 'react';
-import { Bell, Trash2, Plus, AlertCircle, Send, CheckCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Bell, Trash2, Plus, AlertCircle, CheckCircle, Clock, BellOff } from 'lucide-react';
 import Header from '../components/Layout/Header';
-import { Button, EmptyState, Input } from '../components/UI';
+import { Button, EmptyState } from '../components/UI';
 import { stockApi } from '../services/stockApi';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
+// ===== WEB PUSH NOTIFICATION HOOK =====
+const usePushNotification = () => {
+  const [permission, setPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+
+  const requestPermission = async () => {
+    if (typeof Notification === 'undefined') {
+      toast.error('Trình duyệt không hỗ trợ thông báo!');
+      return false;
+    }
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    if (result === 'granted') {
+      toast.success('Đã bật thông báo trình duyệt!');
+      // Test notification
+      new Notification('⚡ VN Stock AI', {
+        body: 'Cảnh báo giá đã được bật thành công!',
+        icon: '/favicon.ico',
+        tag: 'test'
+      });
+    } else {
+      toast.error('Bạn đã tắt quyền thông báo. Hãy bật lại trong cài đặt trình duyệt.');
+    }
+    return result === 'granted';
+  };
+
+  const sendNotification = (title, body, tag = '') => {
+    if (permission !== 'granted') return;
+    try {
+      new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        tag,
+        requireInteraction: false,
+        silent: false,
+      });
+    } catch (e) {
+      console.warn('Push notification failed:', e);
+    }
+  };
+
+  return { permission, requestPermission, sendNotification };
+};
+
+
 const AlertsPage = () => {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { permission, requestPermission, sendNotification } = usePushNotification();
+  const triggeredAlertsRef = useRef(new Set());
   
   // Form state
   const [ticker, setTicker] = useState('');
@@ -20,22 +69,36 @@ const AlertsPage = () => {
   const [telegramId, setTelegramId] = useState('');
   const [note, setNote] = useState('');
 
-  // Fetch alerts list
+  // Fetch alerts list + check for newly triggered
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
     try {
       const data = await stockApi.getAlerts();
       setAlerts(data || []);
+      // Push notification cho cảnh báo mới kích hoạt
+      (data || []).forEach(alert => {
+        if (alert.triggered && !triggeredAlertsRef.current.has(alert.id)) {
+          triggeredAlertsRef.current.add(alert.id);
+          sendNotification(
+            `⚡ Cảnh báo khớp! ${alert.ticker}`,
+            `Giá ${alert.ticker} đã ${alert.condition === 'above' ? 'vượt lên' : 'giảm xuống'} mức ${(alert.price).toLocaleString('vi-VN')}đ`,
+            `alert-${alert.id}`
+          );
+        }
+      });
     } catch (err) {
       console.error('Failed to fetch alerts:', err);
       toast.error('Không thể tải danh sách cảnh báo');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sendNotification]);
 
   useEffect(() => {
     fetchAlerts();
+    // Tự động kiểm tra mỗi 60 giây để bắt push notification kịp thời
+    const interval = setInterval(fetchAlerts, 60000);
+    return () => clearInterval(interval);
   }, [fetchAlerts]);
 
   // Create alert
@@ -194,9 +257,19 @@ const AlertsPage = () => {
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 Danh sách cảnh báo ({alerts.length})
               </h3>
-              <span className="text-[10px] text-slate-500">
-                Quét kiểm tra mỗi 5 phút từ hệ thống
-              </span>
+              {/* Push Notification Toggle */}
+              <button
+                onClick={requestPermission}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer border-none transition-all font-medium"
+                style={{
+                  background: permission === 'granted' ? 'rgba(74,222,128,0.1)' : 'rgba(79,195,247,0.1)',
+                  color: permission === 'granted' ? '#4ade80' : '#4fc3f7',
+                  border: `1px solid ${permission === 'granted' ? 'rgba(74,222,128,0.3)' : 'rgba(79,195,247,0.2)'}`,
+                }}
+              >
+                {permission === 'granted' ? <Bell size={11} /> : <BellOff size={11} />}
+                {permission === 'granted' ? 'Thông báo đã bật' : 'Bật thông báo'}
+              </button>
             </div>
 
             {loading && alerts.length === 0 ? (

@@ -26,8 +26,9 @@ import random
 from datetime import date, timedelta
 import os
 import json
+import tempfile
 
-CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "market_cache.json")
+CACHE_FILE = os.path.join(tempfile.gettempdir(), "market_cache.json")
 
 def _write_cache(key: str, data):
     cache = {}
@@ -869,12 +870,10 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     except BaseException as e:
         logger.warning(f"Failed to fetch live quotes batch: {e}")
 
-    # Ghi nhận kết quả live thành công vào cache
+    # Ghi nhận kết quả live thành công vào cache (ghi đè hoàn toàn để xóa dữ liệu cũ)
     live_results = {r["ticker"]: r for r in results if r.get("is_live")}
     if live_results:
-        cached_quotes = _read_cache("quotes", {})
-        cached_quotes.update(live_results)
-        _write_cache("quotes", cached_quotes)
+        _write_cache("quotes", live_results)
 
     # Điền bổ sung các mã bị thiếu hoặc lỗi bằng cache hoặc mock
     fetched_tickers = {r["ticker"] for r in results}

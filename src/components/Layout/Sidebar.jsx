@@ -3,7 +3,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart2, MessageSquare, History, Settings, TrendingUp,
-  ChevronLeft, ChevronRight, Activity, Star, SlidersHorizontal, Bell
+  ChevronLeft, ChevronRight, Activity, Star, SlidersHorizontal, Bell, Zap
 } from 'lucide-react';
 import useAppStore from '../../store/appStore';
 import useWatchlist from '../../store/watchlistStore';
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { path: '/market',   icon: TrendingUp,           label: 'Thị trường',      badge: 'LIVE' },
   { path: '/screener', icon: SlidersHorizontal,    label: 'Screener',         badge: null },
   { path: '/watchlist',icon: Star,                 label: 'Watchlist',        badge: null },
+  { path: '/scanner',  icon: Zap,                  label: 'Auto Scan',        badge: 'NEW' },
   { path: '/alerts',   icon: Bell,                 label: 'Cảnh báo',         badge: null },
   { path: '/chat',     icon: MessageSquare,        label: 'Chat với AI',     badge: null },
   { path: '/history',  icon: History,              label: 'Lịch sử',          badge: null },

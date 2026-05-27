@@ -98,4 +98,21 @@ export const stockApi = {
     const res = await api.get('/health');
     return res.data;
   },
+
+  async getScanResults() {
+    const res = await api.get('/scanner/results');
+    return res.data?.data || res.data || {};
+  },
+
+  async triggerScan() {
+    const res = await api.post('/scanner/refresh');
+    return res.data;
+  },
+
+  async getPredict(ticker, periods = 10) {
+    const res = await api.get(`/stock/predict?ticker=${ticker.toUpperCase()}&periods=${periods}`);
+    return res.data?.data || res.data || {};
+  },
 };
+
+

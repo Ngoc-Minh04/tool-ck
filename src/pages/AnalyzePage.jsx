@@ -10,6 +10,7 @@ import CandlestickChart from '../components/Chart/CandlestickChart';
 import VolumeChart from '../components/Chart/VolumeChart';
 import IndicatorPanel from '../components/Chart/IndicatorPanel';
 import QuarterlyChart from '../components/Chart/QuarterlyChart';
+import VolumeProfile from '../components/Chart/VolumeProfile';
 import { Tabs, SkeletonCard, Button } from '../components/UI';
 import Header from '../components/Layout/Header';
 import useClaude from '../hooks/useClaude';
@@ -43,9 +44,180 @@ const INFO_TABS = [
   { value: 'result', label: '🤖 Kết quả AI' },
   { value: 'fundamentals', label: '📐 Cơ bản' },
   { value: 'sentiment', label: '📰 Tâm lý Tin tức' },
+  { value: 'prediction', label: '🔮 Dự báo AI' },
 ];
 
-// So sánh đường giá nhiều mã (normalize về 100 để so tỷ lệ %)
+// ===== TAB DỰ BÁO GIÁ (PROPHET) =====
+const PredictionTab = ({ ticker, ohlcvData }) => {
+  const [predData, setPredData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!ticker) return;
+    setLoading(true);
+    setError(null);
+    stockApi.getPredict(ticker)
+      .then(res => { setPredData(res); })
+      .catch(e => setError('Không thể tải dự báo. Thử lại sau.'))
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-16">
+      <div className="animate-spin rounded-full h-10 w-10 border-2 border-cyan-400 border-t-transparent mb-3" />
+      <p className="text-sm text-slate-400">Prophet đang tính toán dự báo...</p>
+      <p className="text-xs text-slate-600 mt-1">Lần đầu có thể mất 15-30 giây</p>
+    </div>
+  );
+
+  if (error || !predData) return (
+    <div className="glass-card p-8 text-center">
+      <div className="text-4xl mb-3">🔮</div>
+      <p className="text-sm text-slate-400 mb-2">{error || 'Chưa có dữ liệu dự báo'}</p>
+      <p className="text-xs text-slate-500">Cần phân tích mã cổ phiếu trước</p>
+    </div>
+  );
+
+  if (!predData.success) return (
+    <div className="glass-card p-6 text-center">
+      <div className="text-3xl mb-2">⚠️</div>
+      <p className="text-sm text-slate-400">{predData.error}</p>
+    </div>
+  );
+
+  const { forecast, trend_label, trend_color, change_pct_10_sessions, accuracy_pct, last_price } = predData;
+
+  // SVG mini chart cho forecast
+  const allPrices = forecast.flatMap(f => [f.lower, f.predicted, f.upper]);
+  const minP = Math.min(...allPrices) * 0.999;
+  const maxP = Math.max(...allPrices) * 1.001;
+  const range = maxP - minP || 1;
+  const W = 640, H = 180, PL = 50, PB = 30, PT = 15;
+  const cW = W - PL - 10;
+  const cH = H - PB - PT;
+  const toX = (i) => PL + (i / Math.max(forecast.length - 1, 1)) * cW;
+  const toY = (v) => PT + cH - ((v - minP) / range) * cH;
+
+  const linePath = forecast.map((f, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(f.predicted).toFixed(1)}`).join(' ');
+  const upperPath = forecast.map((f, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(f.upper).toFixed(1)}`).join(' ');
+  const lowerPath = forecast.map((f, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(f.lower).toFixed(1)}`).join(' ');
+  const bandPath = upperPath + ' ' + forecast.map((f, i) => `${i === 0 ? 'L' : 'L'}${toX(forecast.length - 1 - i).toFixed(1)},${toY(forecast[forecast.length - 1 - i].lower).toFixed(1)}`).join(' ') + ' Z';
+
+  return (
+    <div className="space-y-4 animate-fade-in-up">
+      {/* Header Card */}
+      <div
+        className="p-4 rounded-2xl flex items-center justify-between gap-4 flex-wrap"
+        style={{
+          background: 'linear-gradient(135deg, rgba(13,27,42,0.9), rgba(6,40,60,0.7))',
+          border: `1px solid ${trend_color}30`,
+        }}
+      >
+        <div>
+          <div className="text-[11px] text-slate-500 uppercase font-bold tracking-wider mb-1">Dự báo Prophet AI · 10 phiên tới</div>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-black" style={{ color: trend_color }}>{trend_label}</span>
+            <span
+              className="text-sm font-bold px-2 py-0.5 rounded-full"
+              style={{ color: trend_color, background: trend_color + '15' }}
+            >
+              {change_pct_10_sessions >= 0 ? '+' : ''}{change_pct_10_sessions}%
+            </span>
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Giá hiện tại: <span className="text-slate-300 font-semibold font-num">{(last_price/1000).toFixed(1)}k₫</span>
+            {accuracy_pct && <span className="ml-3">• Độ chính xác lịch sử: <span className="text-cyan-400">{accuracy_pct}%</span></span>}
+          </div>
+        </div>
+        <div
+          className="text-xs px-3 py-1.5 rounded-xl"
+          style={{ background: 'rgba(255,179,0,0.08)', border: '1px solid rgba(255,179,0,0.2)', color: '#f59e0b' }}
+        >
+          ⚠️ Chỉ mang tính tham khảo
+        </div>
+      </div>
+
+      {/* Forecast Chart */}
+      <div className="glass-card p-4">
+        <div className="text-xs font-semibold text-slate-400 mb-3">📈 Biểu đồ vùng dự báo (80% confidence)</div>
+        <div className="overflow-x-auto">
+          <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
+            {/* Dải lưới */}
+            {[0, 0.33, 0.66, 1].map(p => {
+              const y = PT + cH - p * cH;
+              const v = minP + p * range;
+              return (
+                <g key={p}>
+                  <line x1={PL} y1={y} x2={W-5} y2={y} stroke="rgba(79,195,247,0.05)" strokeWidth="1" />
+                  <text x={PL-5} y={y+3} fill="#475569" fontSize="9" textAnchor="end">{(v/1000).toFixed(1)}k</text>
+                </g>
+              );
+            })}
+            {/* Vùng dự báo (band) */}
+            <path d={bandPath} fill={trend_color + '15'} />
+            {/* Đường upper/lower */}
+            <path d={upperPath} fill="none" stroke={trend_color + '50'} strokeWidth="1" strokeDasharray="3,3" />
+            <path d={lowerPath} fill="none" stroke={trend_color + '50'} strokeWidth="1" strokeDasharray="3,3" />
+            {/* Đường chính */}
+            <path d={linePath} fill="none" stroke={trend_color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Chấm từng phiên */}
+            {forecast.map((f, i) => (
+              <circle key={i} cx={toX(i)} cy={toY(f.predicted)} r="3" fill={trend_color} stroke="#0d1b2a" strokeWidth="1.5" />
+            ))}
+            {/* Nhãn ngày */}
+            {forecast.filter((_, i) => i === 0 || i === forecast.length - 1 || i % 3 === 0).map((f, _, arr) => {
+              const origIdx = forecast.indexOf(f);
+              return (
+                <text key={origIdx} x={toX(origIdx)} y={H - 5} fill="#475569" fontSize="8" textAnchor="middle">
+                  {f.date.slice(5)}
+                </text>
+              );
+            })}
+          </svg>
+        </div>
+      </div>
+
+      {/* Forecast Table */}
+      <div className="glass-card overflow-hidden">
+        <div className="px-4 py-3 text-xs font-bold text-slate-300 border-b border-slate-800/50">Chi tiết dự báo từng phiên</div>
+        <div className="divide-y divide-slate-800/30">
+          {forecast.map((f, i) => (
+            <div key={f.date} className="grid px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '100px 1fr 80px 80px 80px' }}>
+              <span className="text-slate-500 font-num">{f.date.slice(5)}</span>
+              <div className="flex items-center">
+                <div className="flex-1 h-1 rounded-full bg-slate-800 overflow-hidden max-w-[120px]">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, ((f.predicted - minP) / range) * 100))}%`,
+                      background: trend_color,
+                    }}
+                  />
+                </div>
+              </div>
+              <span className="font-bold font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#4ade80' : '#f87171' }}>
+                {(f.predicted/1000).toFixed(2)}k
+              </span>
+              <span className="text-slate-600 font-num text-right">{(f.lower/1000).toFixed(1)}k</span>
+              <span className="text-slate-600 font-num text-right">{(f.upper/1000).toFixed(1)}k</span>
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-2 text-[10px] text-slate-600 flex justify-between">
+          <span>Giá dự báo (k₫)</span>
+          <span>Vùng thấp — Vùng cao (80% CI)</span>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-slate-600 text-center">
+        🤖 Model: Prophet (Meta) · Không phải khuyến nghị đầu tư · Chỉ mang tính tham khảo thống kê
+      </p>
+    </div>
+  );
+};
+
+
 const CompareChart = ({ datasets }) => {
   const activeDatasets = datasets.filter(d => d.data && d.data.length > 0 && d.ticker);
   if (activeDatasets.length === 0) return null;
@@ -940,7 +1112,16 @@ const AnalyzePage = () => {
                           </div>
                         ) : (
                           <>
-                            <CandlestickChart data={stock1.ohlcv} showMA={true} showBB={showBB} sr={stock1.sr} height={300} />
+                            <div className="flex gap-1" style={{ height: 300 }}>
+                              <div className="flex-1 min-w-0">
+                                <CandlestickChart data={stock1.ohlcv} showMA={true} showBB={showBB} sr={stock1.sr} height={300} />
+                              </div>
+                              <VolumeProfile
+                                data={stock1.ohlcv}
+                                height={300}
+                                currentPrice={stock1.info?.currentPrice || null}
+                              />
+                            </div>
                             <div style={{ borderTop: '1px solid rgba(79,195,247,0.08)', marginTop: 4 }}>
                               <VolumeChart data={stock1.ohlcv} height={80} />
                             </div>
@@ -991,6 +1172,12 @@ const AnalyzePage = () => {
                     loading={sentimentLoading}
                     onAnalyze={handleAnalyzeSentiment}
                     ticker={currentParams?.ticker}
+                  />
+                )}
+                {infoTab === 'prediction' && (
+                  <PredictionTab
+                    ticker={currentParams?.ticker}
+                    ohlcvData={stock1.ohlcv}
                   />
                 )}
               </div>
