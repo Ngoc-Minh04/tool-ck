@@ -32,7 +32,7 @@ const VolumeChart = ({ data = [], height = 100 }) => {
             );
           }}
         />
-        <Bar dataKey="volume" maxBarSize={12} radius={[2, 2, 0, 0]}>
+        <Bar isAnimationActive={false} dataKey="volume" maxBarSize={12} radius={[2, 2, 0, 0]}>
           {displayData.map((entry, i) => (
             <Cell
               key={i}
@@ -46,3 +46,4 @@ const VolumeChart = ({ data = [], height = 100 }) => {
 };
 
 export default VolumeChart;
+

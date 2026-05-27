@@ -224,7 +224,7 @@ const MarketPage = () => {
       if (checkMarket()) {
         updateQuotes(false);
       }
-    }, 1500);
+    }, 60000);
     return () => clearInterval(timer);
   }, [fetchQuickQuotes, checkMarket]);
 
@@ -447,3 +447,7 @@ const MarketPage = () => {
 };
 
 export default MarketPage;
+
+
+
+

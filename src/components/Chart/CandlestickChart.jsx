@@ -42,7 +42,7 @@ const CandlestickBar = (props) => {
   return (
     <g>
       {/* Bấc trên/dưới */}
-      <line
+      <Line isAnimationActive={false}
         x1={x + width / 2}
         y1={y}
         x2={x + width / 2}
@@ -208,14 +208,14 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
         {/* Bollinger Bands */}
         {showBB && (
           <>
-            <Line type="monotone" dataKey="bb_upper" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
-            <Line type="monotone" dataKey="bb_mid" stroke="rgba(79,195,247,0.5)" dot={false} strokeWidth={1} />
-            <Line type="monotone" dataKey="bb_lower" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
+            <Line isAnimationActive={false} type="monotone" dataKey="bb_upper" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
+            <Line isAnimationActive={false} type="monotone" dataKey="bb_mid" stroke="rgba(79,195,247,0.5)" dot={false} strokeWidth={1} />
+            <Line isAnimationActive={false} type="monotone" dataKey="bb_lower" stroke="rgba(79,195,247,0.3)" dot={false} strokeWidth={1} strokeDasharray="4 2" />
           </>
         )}
 
         {/* Bấc nến (High-Low) */}
-        <Bar
+        <Bar isAnimationActive={false}
           dataKey="high"
           fill="transparent"
           shape={(props) => {
@@ -227,7 +227,7 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
             const yLow = yAxis.scale(low);
             const color = isUp ? '#00e676' : '#ff5252';
             return (
-              <line
+              <Line isAnimationActive={false}
                 x1={x + width / 2}
                 y1={yHigh}
                 x2={x + width / 2}
@@ -240,7 +240,7 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
         />
 
         {/* Thân nến (Open-Close) */}
-        <Bar
+        <Bar isAnimationActive={false}
           dataKey="close"
           fill="transparent"
           shape={(props) => {
@@ -274,9 +274,9 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
         {/* Moving Averages */}
         {showMA && (
           <>
-            <Line type="monotone" dataKey="ma20" stroke="#4fc3f7" dot={false} strokeWidth={1.5} />
-            <Line type="monotone" dataKey="ma50" stroke="#ffb300" dot={false} strokeWidth={1.5} />
-            <Line type="monotone" dataKey="ma200" stroke="#ff5252" dot={false} strokeWidth={1.5} />
+            <Line isAnimationActive={false} type="monotone" dataKey="ma20" stroke="#4fc3f7" dot={false} strokeWidth={1.5} />
+            <Line isAnimationActive={false} type="monotone" dataKey="ma50" stroke="#ffb300" dot={false} strokeWidth={1.5} />
+            <Line isAnimationActive={false} type="monotone" dataKey="ma200" stroke="#ff5252" dot={false} strokeWidth={1.5} />
           </>
         )}
 
@@ -288,3 +288,4 @@ const CandlestickChart = ({ data = [], showMA = true, showBB = false, sr = null,
 };
 
 export default CandlestickChart;
+

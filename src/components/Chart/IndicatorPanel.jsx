@@ -50,7 +50,7 @@ const RSIChart = ({ data = [], height = 100 }) => {
           <ReferenceLine y={70} stroke="rgba(255,82,82,0.4)" strokeDasharray="3 3" />
           <ReferenceLine y={30} stroke="rgba(0,230,118,0.4)" strokeDasharray="3 3" />
           <ReferenceLine y={50} stroke="rgba(79,195,247,0.2)" />
-          <Line
+          <Line isAnimationActive={false}
             type="monotone"
             dataKey="rsi"
             stroke="#4fc3f7"
@@ -103,7 +103,7 @@ const MACDChart = ({ data = [], height = 100 }) => {
             }}
           />
           <ReferenceLine y={0} stroke="rgba(79,195,247,0.2)" />
-          <Bar dataKey="macd_hist" maxBarSize={6} radius={[1, 1, 0, 0]}>
+          <Bar isAnimationActive={false} dataKey="macd_hist" maxBarSize={6} radius={[1, 1, 0, 0]}>
             {displayData.map((entry, i) => (
               <Cell
                 key={i}
@@ -111,8 +111,8 @@ const MACDChart = ({ data = [], height = 100 }) => {
               />
             ))}
           </Bar>
-          <Line type="monotone" dataKey="macd" stroke="#4fc3f7" dot={false} strokeWidth={1.2} />
-          <Line type="monotone" dataKey="macd_signal" stroke="#ffb300" dot={false} strokeWidth={1.2} />
+          <Line isAnimationActive={false} type="monotone" dataKey="macd" stroke="#4fc3f7" dot={false} strokeWidth={1.2} />
+          <Line isAnimationActive={false} type="monotone" dataKey="macd_signal" stroke="#ffb300" dot={false} strokeWidth={1.2} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -129,3 +129,4 @@ const IndicatorPanel = ({ data = [] }) => {
 };
 
 export default IndicatorPanel;
+
