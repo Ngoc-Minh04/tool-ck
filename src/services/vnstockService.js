@@ -313,7 +313,7 @@ export const getSectorData = (quotes) => {
   return mapping.map(s => {
     const matched = quotes.filter(q => s.tickers.includes(q.ticker));
     if (!matched.length) {
-      return { ...s, change: 0, volume: 1e9 };
+      return { ...s, change: 0, volume: 0 };
     }
     const avgChange = matched.reduce((sum, q) => sum + (q.pct || 0), 0) / matched.length;
     const totalValueVND = matched.reduce((sum, q) => {
@@ -324,7 +324,7 @@ export const getSectorData = (quotes) => {
     return {
       ...s,
       change: avgChange,
-      volume: totalValueVND || 1e9
+      volume: totalValueVND
     };
   });
 };

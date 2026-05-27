@@ -55,6 +55,22 @@ def _read_cache(key: str, default=None):
         logger.error(f"Read cache error: {e}")
         return default
 
+def is_market_active() -> bool:
+    import datetime
+    now = datetime.datetime.now()
+    day = now.weekday()  # 0=T2, 1=T3, 2=T4, 3=T5, 4=T6, 5=T7, 6=CN
+    time_in_minutes = now.hour * 60 + now.minute
+    
+    # Giờ Việt Nam (GTM+7):
+    # - Thứ Hai đến thứ Sáu (day <= 4)
+    # - Phiên Sáng: 09:00 - 11:30 (540 phút đến 690 phút)
+    # - Phiên Chiều: 13:00 - 15:15 (780 phút đến 915 phút)
+    is_weekday = day >= 0 and day <= 4
+    is_morning = time_in_minutes >= 540 and time_in_minutes <= 690
+    is_afternoon = time_in_minutes >= 780 and time_in_minutes <= 915
+    
+    return is_weekday and (is_morning or is_afternoon)
+
 
 def _get_vnstock():
     """Lazy import — thử vnstock (v4) rồi vnstock3, fallback None nếu cả hai lỗi."""
@@ -201,6 +217,14 @@ def _estimate_index_breadth(index_name: str, change_pct: float) -> dict:
 
 
 def get_market_overview() -> list:
+    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
+    if not is_market_active():
+        cached_indices = _read_cache("indices")
+        if cached_indices:
+            for ci in cached_indices:
+                ci["is_live"] = False
+            return cached_indices
+
     from concurrent.futures import ThreadPoolExecutor
     indices = ["VNINDEX", "VN30", "HNX30", "UPCOM"]
 
@@ -326,6 +350,14 @@ def get_top_movers() -> dict:
 
 
 def get_foreign_flow(df = None) -> list:
+    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
+    if not is_market_active():
+        cached_foreign = _read_cache("foreign")
+        if cached_foreign:
+            return cached_foreign
+        if _last_foreign_flow:
+            return _last_foreign_flow
+
     import pandas as pd
     global _last_foreign_flow
     
@@ -563,6 +595,27 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
     
     default_tickers = ["VCB", "BID", "CTG", "FPT", "HPG", "VIC", "VNM", "ACB", "MBB", "TCB", "SSI", "MWG", "GAS", "VHM", "VRE"]
     tickers = ticker_list if ticker_list is not None else default_tickers
+
+    # Nếu ngoài giờ giao dịch, ưu tiên dùng dữ liệu cache của phiên hôm trước
+    if not is_market_active():
+        cached_quotes = _read_cache("quotes", {})
+        results = []
+        for ticker in tickers:
+            t_upper = ticker.upper()
+            if t_upper in cached_quotes:
+                q_copy = cached_quotes[t_upper].copy()
+                q_copy["is_live"] = False
+                results.append(q_copy)
+            elif t_upper in _last_live_quotes:
+                results.append(_last_live_quotes[t_upper])
+            else:
+                fb = fallbacks.get(t_upper)
+                if fb:
+                    fb_copy = fb.copy()
+                    fb_copy["is_live"] = False
+                    results.append(fb_copy)
+        if results:
+            return results
     
     fallbacks = {
         'VCB': { 'ticker': 'VCB', 'exchange': 'HOSE', 'price': 64400.0, 'change': 700.0, 'pct': 1.1, 'vol': 2140, 'cap': '355T', 'ref': 63700.0, 'ceil': 68100.0, 'floor': 59300.0, 'high': 64500.0, 'low': 63700.0, 'open': 63700.0 },

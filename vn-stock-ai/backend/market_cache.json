@@ -355,9 +355,9 @@
       "change": -1.85,
       "change_pct": -0.1,
       "volume": 729758151,
-      "advance": 171,
-      "decline": 169,
-      "unchanged": 60,
+      "advance": 174,
+      "decline": 168,
+      "unchanged": 58,
       "is_live": true
     },
     {
@@ -366,9 +366,9 @@
       "change": 6.18,
       "change_pct": 0.31,
       "volume": 306850922,
-      "advance": 14,
+      "advance": 13,
       "decline": 13,
-      "unchanged": 3,
+      "unchanged": 4,
       "is_live": true
     },
     {
@@ -378,8 +378,8 @@
       "change_pct": 1.51,
       "volume": 60364859,
       "advance": 18,
-      "decline": 10,
-      "unchanged": 2,
+      "decline": 8,
+      "unchanged": 4,
       "is_live": true
     },
     {
@@ -388,9 +388,9 @@
       "change": -0.13,
       "change_pct": -0.1,
       "volume": 26204686,
-      "advance": 338,
-      "decline": 352,
-      "unchanged": 110,
+      "advance": 334,
+      "decline": 389,
+      "unchanged": 77,
       "is_live": true
     }
   ]

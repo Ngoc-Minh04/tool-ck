@@ -8,9 +8,14 @@ const SectorSignals = ({ sectors = [] }) => {
       </h3>
       <div className="space-y-1.5">
         {sectors.map((sector) => {
-          const pct = parseFloat(sector.change).toFixed(2);
-          const isUp = sector.change > 0;
-          const barWidth = Math.min(Math.abs(sector.change) * 15, 100);
+          const pctVal = parseFloat(sector.change) || 0;
+          const pct = pctVal.toFixed(2);
+          const isUp = pctVal > 0;
+          const isDown = pctVal < 0;
+          const barWidth = Math.min(Math.abs(pctVal) * 15, 100);
+
+          const textColor = isUp ? '#00e676' : isDown ? '#ff5252' : 'var(--text-muted, #94a3b8)';
+          const barColor = isUp ? '#00e676' : isDown ? '#ff5252' : 'transparent';
 
           return (
             <div key={sector.id} className="flex items-center gap-2 text-xs">
@@ -20,7 +25,7 @@ const SectorSignals = ({ sectors = [] }) => {
                   <span className="text-[11px] text-slate-400 truncate pr-2">{sector.name}</span>
                   <span
                     className="text-[11px] font-num font-bold"
-                    style={{ color: isUp ? '#00e676' : '#ff5252' }}
+                    style={{ color: textColor }}
                   >
                     {isUp ? '+' : ''}{pct}%
                   </span>
@@ -31,7 +36,7 @@ const SectorSignals = ({ sectors = [] }) => {
                     className="h-1 rounded-full transition-all duration-500"
                     style={{
                       width: `${barWidth}%`,
-                      background: isUp ? '#00e676' : '#ff5252',
+                      background: barColor,
                       opacity: 0.7,
                       marginLeft: isUp ? 0 : `${100 - barWidth}%`,
                     }}
@@ -39,7 +44,7 @@ const SectorSignals = ({ sectors = [] }) => {
                 </div>
               </div>
               <span className="text-[10px] font-num text-slate-500 w-12 text-right">
-                {(sector.volume / 1e9).toFixed(1)}B
+                {sector.volume > 0 ? `${(sector.volume / 1e9).toFixed(1)}B` : '—'}
               </span>
             </div>
           );
