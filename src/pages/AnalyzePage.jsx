@@ -55,6 +55,7 @@ const INFO_TABS = [
   { value: 'fundamentals', label: '📐 Cơ bản' },
   { value: 'sentiment', label: '📰 Tâm lý Tin tức' },
   { value: 'prediction', label: '🔮 Dự báo AI' },
+  { value: 'backtest', label: '🧪 Thử nghiệm AI' },
 ];
 
 // ===== CUSTOM TOOLTIP CHO BIỂU ĐỒ DỰ BÁO =====
@@ -307,6 +308,324 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
       <p className="text-[10px] text-slate-600 text-center">
         🤖 Model: Prophet (Meta) · Tích hợp chỉ báo tâm lý tin tức từ CafeF · Không phải khuyến nghị đầu tư
       </p>
+    </div>
+  );
+};
+
+// ===== CUSTOM TOOLTIP CHO BIỂU ĐỒ BACKTEST =====
+const CustomBacktestTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="p-3 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl shadow-xl font-num">
+        <p className="text-[11px] font-bold text-slate-400 mb-1.5">
+          {data.date.split('-').reverse().join('/')}
+        </p>
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between items-center gap-6">
+            <span className="text-slate-500">Tài sản (Equity):</span>
+            <span className="font-extrabold text-cyan-400">{(data.equity).toLocaleString('vi-VN')} ₫</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// ===== TAB THỬ NGHIỆM CHIẾN THUẬT (BACKTEST) =====
+const BacktestTab = ({ ticker }) => {
+  const [strategy, setStrategy] = useState('ma_cross');
+  const [period, setPeriod] = useState('1y');
+  const [initialCapital, setInitialCapital] = useState(100000000);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const formatCapital = (val) => {
+    if (!val && val !== 0) return '';
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const parseCapital = (str) => {
+    const clean = str.replace(/\D/g, '');
+    return clean ? parseInt(clean, 10) : 0;
+  };
+
+  const handleRunBacktest = () => {
+    if (!ticker) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    stockApi.runBacktest({
+      ticker,
+      strategy,
+      period,
+      initial_capital: parseFloat(initialCapital)
+    })
+      .then(res => {
+        if (res.total_trades !== undefined) {
+          setResult(res);
+        } else {
+          setError('Không có kết quả kiểm thử nào được trả về.');
+        }
+      })
+      .catch(e => {
+        console.error(e);
+        setError('Không thể chạy thử nghiệm. Vui lòng thử lại sau.');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    handleRunBacktest();
+  }, [ticker]);
+
+  return (
+    <div className="space-y-4 animate-fade-in-up">
+      {/* Configuration Panel */}
+      <div className="glass-card p-4 space-y-4 bg-slate-900/20">
+        <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">🧪 Cấu hình Mô phỏng</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Strategy Select */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] text-slate-500 font-semibold">Chiến thuật giao dịch</label>
+            <select
+              value={strategy}
+              onChange={(e) => setStrategy(e.target.value)}
+              className="px-3 py-2 text-xs rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+            >
+              <option value="ma_cross">Đường trung bình chéo (MA20/50)</option>
+              <option value="rsi">Sức mạnh tương đối (RSI Bounce)</option>
+              <option value="macd">Hội tụ phân kỳ (MACD Hist)</option>
+            </select>
+          </div>
+
+          {/* Period Select */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] text-slate-500 font-semibold">Khung thời gian dữ liệu</label>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="px-3 py-2 text-xs rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+            >
+              <option value="3mo">3 Tháng</option>
+              <option value="6mo">6 Tháng</option>
+              <option value="1y">1 Năm</option>
+              <option value="2y">2 Năm</option>
+            </select>
+          </div>
+
+          {/* Initial Capital */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] text-slate-500 font-semibold">Vốn ban đầu (VND)</label>
+            <input
+              type="text"
+              value={formatCapital(initialCapital)}
+              onChange={(e) => {
+                const parsed = parseCapital(e.target.value);
+                setInitialCapital(parsed);
+              }}
+              placeholder="Vốn ban đầu (VND)"
+              className="px-3 py-2 text-xs rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 focus:border-cyan-500/50 focus:outline-none font-num"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleRunBacktest}
+          disabled={loading}
+          className="w-full py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 disabled:bg-slate-800 disabled:text-slate-500 cursor-pointer transition-all flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-slate-950 border-t-transparent" />
+              Đang tính toán lịch sử lệnh...
+            </>
+          ) : (
+            <>🧪 Chạy Thử nghiệm Chiến thuật</>
+          )}
+        </button>
+      </div>
+
+      {/* Main Results Display */}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-center text-xs">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-4">
+          {/* Performance KPIs Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {/* ROI */}
+            <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 flex flex-col justify-between">
+              <span className="text-[10px] text-slate-500 font-semibold">Lợi nhuận (ROI)</span>
+              <div className="mt-1.5 flex items-baseline gap-1">
+                <span className={`text-lg font-extrabold font-num ${result.total_return >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {result.total_return >= 0 ? '+' : ''}{result.total_return}%
+                </span>
+              </div>
+            </div>
+
+            {/* Final Portfolio Value */}
+            <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 flex flex-col justify-between col-span-2">
+              <span className="text-[10px] text-slate-500 font-semibold">Tài sản cuối cùng</span>
+              <div className="mt-1.5">
+                <span className="text-base font-extrabold font-num text-slate-200">
+                  {Math.round(initialCapital * (1 + result.total_return / 100)).toLocaleString('vi-VN')} ₫
+                </span>
+                <span className="text-[9px] text-slate-500 block">Vốn ban đầu: {initialCapital.toLocaleString('vi-VN')} ₫</span>
+              </div>
+            </div>
+
+            {/* Win Rate */}
+            <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 flex flex-col justify-between">
+              <span className="text-[10px] text-slate-500 font-semibold">Tỷ lệ thắng</span>
+              <div className="mt-1.5 flex items-baseline gap-1">
+                <span className="text-lg font-extrabold font-num text-cyan-400">{result.win_rate}%</span>
+              </div>
+            </div>
+
+            {/* Max Drawdown */}
+            <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 flex flex-col justify-between">
+              <span className="text-[10px] text-slate-500 font-semibold">Sụt giảm lớn nhất</span>
+              <div className="mt-1.5 flex items-baseline gap-1">
+                <span className="text-lg font-extrabold font-num text-amber-500">{result.max_drawdown}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {/* Sharpe Ratio */}
+            <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 flex flex-col justify-between">
+              <span className="text-[10px] text-slate-500 font-semibold">Chỉ số Sharpe</span>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-lg font-extrabold font-num text-purple-400">{result.sharpe_ratio}</span>
+              </div>
+            </div>
+
+            {/* Total Trades */}
+            <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 flex flex-col justify-between">
+              <span className="text-[10px] text-slate-500 font-semibold">Tổng số giao dịch</span>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-lg font-extrabold font-num text-slate-200">{result.total_trades}</span>
+                <span className="text-[10px] text-slate-500 font-semibold">lệnh đóng</span>
+              </div>
+            </div>
+
+            {/* Note status */}
+            <div className="p-3 rounded-2xl bg-slate-900/20 border border-slate-800/40 flex items-center col-span-3 text-[10px] text-slate-500 italic">
+              💡 Chỉ số Sharpe &gt; 1.0 biểu thị chiến thuật có tỷ suất sinh lời tốt trên mỗi đơn vị biến động rủi ro. Sụt giảm lớn nhất (Max Drawdown) thể hiện rủi ro lớn nhất tài khoản từng gánh chịu.
+            </div>
+          </div>
+
+          {/* Equity Curve Chart */}
+          {result.equity_curve && result.equity_curve.length > 0 && (
+            <div className="glass-card p-4">
+              <div className="text-xs font-semibold text-slate-400 mb-3 flex items-center justify-between">
+                <span>📈 Biểu đồ biến động tài sản (Equity Curve)</span>
+                <span className="text-[10px] text-slate-500">Mô phỏng vốn qua các chu kỳ giao dịch</span>
+              </div>
+              <div className="w-full h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={result.equity_curve}
+                    margin={{ top: 15, right: 10, left: 10, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="equityBand" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={result.total_return >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor={result.total_return >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0.02}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(str) => {
+                        if (!str) return '';
+                        const parts = str.split('-');
+                        return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : str;
+                      }}
+                      stroke="#475569"
+                      fontSize={9}
+                      tickLine={false}
+                      axisLine={false}
+                      dy={8}
+                    />
+                    <YAxis
+                      domain={['auto', 'auto']}
+                      tickFormatter={(val) => `${(val / 1000000).toFixed(0)}Tr`}
+                      stroke="#475569"
+                      fontSize={9}
+                      tickLine={false}
+                      axisLine={false}
+                      dx={-2}
+                      orientation="right"
+                    />
+                    <Tooltip content={<CustomBacktestTooltip />} />
+                    <Area
+                      name="Tổng tài sản"
+                      type="monotone"
+                      dataKey="equity"
+                      stroke={result.total_return >= 0 ? "#10b981" : "#ef4444"}
+                      strokeWidth={2}
+                      fill="url(#equityBand)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Trades list */}
+          {result.trades && result.trades.length > 0 && (
+            <div className="glass-card overflow-hidden">
+              <div className="px-4 py-3 text-xs font-bold text-slate-300 border-b border-slate-800/50">Lịch sử giao dịch mô phỏng (gần nhất)</div>
+              <div className="divide-y divide-slate-800/30 overflow-x-auto">
+                <table className="w-full text-xs text-left text-slate-400">
+                  <thead className="bg-slate-900/40 text-slate-500 uppercase text-[9px] tracking-wider">
+                    <tr>
+                      <th className="px-4 py-2">Ngày</th>
+                      <th className="px-4 py-2">Hành động</th>
+                      <th className="px-4 py-2 text-right">Giá</th>
+                      <th className="px-4 py-2 text-right">Số lượng</th>
+                      <th className="px-4 py-2 text-right">Lãi/Lỗ (PnL)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/20">
+                    {result.trades.slice(-5).reverse().map((t, idx) => (
+                      <tr key={idx} className="hover:bg-slate-900/10">
+                        <td className="px-4 py-2.5 font-num">{t.date.split('-').reverse().join('/')}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.type === 'buy' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                            {t.type === 'buy' ? 'MUA' : 'BÁN'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-num text-slate-300">{(t.price).toLocaleString()} ₫</td>
+                        <td className="px-4 py-2.5 text-right font-num">{t.shares.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-right font-num font-bold">
+                          {t.type === 'sell' ? (
+                            <span className={t.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                              {t.pnl >= 0 ? '+' : ''}{(t.pnl).toLocaleString()} ₫
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -1273,6 +1592,11 @@ const AnalyzePage = () => {
                     ticker={currentParams?.ticker}
                     ohlcvData={stock1.ohlcv}
                     sentimentData={sentimentData}
+                  />
+                )}
+                {infoTab === 'backtest' && (
+                  <BacktestTab
+                    ticker={currentParams?.ticker}
                   />
                 )}
               </div>

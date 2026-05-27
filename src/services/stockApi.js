@@ -117,6 +117,11 @@ export const stockApi = {
     const res = await api.get(url);
     return res.data?.data || res.data || {};
   },
+
+  async runBacktest(body) {
+    const res = await api.post('/stock/backtest', body);
+    return res.data?.data || res.data || {};
+  },
 };
 
 

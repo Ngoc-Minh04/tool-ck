@@ -136,12 +136,23 @@ def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 
             shares = int(capital / price)
             position = shares
             capital -= shares * price
-            trades.append({"type": "buy", "price": price, "shares": shares})
+            trades.append({
+                "date": str(df["date"].iloc[i])[:10],
+                "type": "buy",
+                "price": price,
+                "shares": shares
+            })
         elif sig == -1 and position > 0:
             revenue = position * price
             entry_cost = trades[-1]["price"] * trades[-1]["shares"] if trades else 0
             pnl = revenue - entry_cost
-            trades.append({"type": "sell", "price": price, "pnl": pnl})
+            trades.append({
+                "date": str(df["date"].iloc[i])[:10],
+                "type": "sell",
+                "price": price,
+                "pnl": pnl,
+                "shares": position
+            })
             capital += revenue
             position = 0
 
@@ -174,6 +185,7 @@ def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 
         "max_drawdown": round(max_dd, 2),
         "win_rate": round(win_rate, 1),
         "total_trades": len(sell_trades),
+        "trades": trades,
         "equity_curve": equity_curve[::max(1, len(equity_curve)//200)],  # Downsample
     }
 
