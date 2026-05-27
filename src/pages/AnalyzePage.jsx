@@ -3,6 +3,16 @@
 import { useState, useCallback, useEffect } from 'react';
 import { AlertCircle, Settings, GitCompare } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip 
+} from 'recharts';
 import TickerForm from '../components/Analysis/TickerForm';
 import ResultCard from '../components/Analysis/ResultCard';
 import FundamentalsTab from '../components/Analysis/FundamentalsTab';
@@ -47,8 +57,42 @@ const INFO_TABS = [
   { value: 'prediction', label: '🔮 Dự báo AI' },
 ];
 
+// ===== CUSTOM TOOLTIP CHO BIỂU ĐỒ DỰ BÁO =====
+const CustomForecastTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const isUp = data.change_pct_from_now >= 0;
+    return (
+      <div className="p-3 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl shadow-xl">
+        <p className="text-[11px] font-bold text-slate-400 mb-1.5 font-num">
+          {data.date.split('-').reverse().join('/')}
+        </p>
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between items-center gap-6">
+            <span className="text-slate-500">Giá dự báo:</span>
+            <span className="font-extrabold text-slate-200 font-num">{(data.predicted).toLocaleString()} ₫</span>
+          </div>
+          <div className="flex justify-between items-center gap-6">
+            <span className="text-slate-500">Khoảng dao động:</span>
+            <span className="font-medium text-slate-400 font-num">
+              {(data.lower).toLocaleString()} - {(data.upper).toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-6 pt-1 border-t border-slate-800/40">
+            <span className="text-slate-500">Thay đổi dự tính:</span>
+            <span className={`font-extrabold font-num ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+              {isUp ? '+' : ''}{data.change_pct_from_now}%
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 // ===== TAB DỰ BÁO GIÁ (PROPHET) =====
-const PredictionTab = ({ ticker, ohlcvData }) => {
+const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
   const [predData, setPredData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -57,11 +101,12 @@ const PredictionTab = ({ ticker, ohlcvData }) => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
-    stockApi.getPredict(ticker)
+    const score = sentimentData?.score;
+    stockApi.getPredict(ticker, 10, score)
       .then(res => { setPredData(res); })
       .catch(e => setError('Không thể tải dự báo. Thử lại sau.'))
       .finally(() => setLoading(false));
-  }, [ticker]);
+  }, [ticker, sentimentData?.score]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-16">
@@ -88,21 +133,42 @@ const PredictionTab = ({ ticker, ohlcvData }) => {
 
   const { forecast, trend_label, trend_color, change_pct_10_sessions, accuracy_pct, last_price } = predData;
 
-  // SVG mini chart cho forecast
   const allPrices = forecast.flatMap(f => [f.lower, f.predicted, f.upper]);
-  const minP = Math.min(...allPrices) * 0.999;
-  const maxP = Math.max(...allPrices) * 1.001;
-  const range = maxP - minP || 1;
-  const W = 640, H = 180, PL = 50, PB = 30, PT = 15;
-  const cW = W - PL - 10;
-  const cH = H - PB - PT;
-  const toX = (i) => PL + (i / Math.max(forecast.length - 1, 1)) * cW;
-  const toY = (v) => PT + cH - ((v - minP) / range) * cH;
+  const minP = Math.min(...allPrices) * 0.995;
+  const maxP = Math.max(...allPrices) * 1.005;
 
-  const linePath = forecast.map((f, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(f.predicted).toFixed(1)}`).join(' ');
-  const upperPath = forecast.map((f, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(f.upper).toFixed(1)}`).join(' ');
-  const lowerPath = forecast.map((f, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(f.lower).toFixed(1)}`).join(' ');
-  const bandPath = upperPath + ' ' + forecast.map((f, i) => `${i === 0 ? 'L' : 'L'}${toX(forecast.length - 1 - i).toFixed(1)},${toY(forecast[forecast.length - 1 - i].lower).toFixed(1)}`).join(' ') + ' Z';
+  let sentimentBadge = null;
+  if (sentimentData && sentimentData.score !== undefined && sentimentData.score !== null) {
+    const score = sentimentData.score;
+    if (score >= 10) {
+      sentimentBadge = (
+        <div className="text-xs px-3 py-1.5 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span>Tâm lý Tích cực (+{score}): Đã tối ưu hóa xu hướng tăng</span>
+        </div>
+      );
+    } else if (score <= -10) {
+      sentimentBadge = (
+        <div className="text-xs px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+          <span>Tâm lý Tiêu cực ({score}): Đã tối ưu hóa xu hướng giảm</span>
+        </div>
+      );
+    } else {
+      sentimentBadge = (
+        <div className="text-xs px-3 py-1.5 rounded-xl bg-slate-500/10 border border-slate-500/30 text-slate-400 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-slate-400" />
+          <span>Tâm lý Trung tính ({score}): Giữ nguyên xu hướng gốc</span>
+        </div>
+      );
+    }
+  } else {
+    sentimentBadge = (
+      <div className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-500/80 flex items-center gap-1">
+        <span>💡 Phân tích Tâm lý Tin tức để tối ưu hóa dự báo</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-fade-in-up">
@@ -126,55 +192,80 @@ const PredictionTab = ({ ticker, ohlcvData }) => {
             </span>
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            Giá hiện tại: <span className="text-slate-300 font-semibold font-num">{(last_price/1000).toFixed(1)}k₫</span>
-            {accuracy_pct && <span className="ml-3">• Độ chính xác lịch sử: <span className="text-cyan-400">{accuracy_pct}%</span></span>}
+            Giá hiện tại: <span className="text-slate-300 font-semibold font-num">{(last_price).toLocaleString()} ₫</span>
+            {accuracy_pct && <span className="ml-3">• Độ chính xác lịch sử: <span className="text-cyan-400 font-bold">{accuracy_pct}%</span></span>}
           </div>
         </div>
-        <div
-          className="text-xs px-3 py-1.5 rounded-xl"
-          style={{ background: 'rgba(255,179,0,0.08)', border: '1px solid rgba(255,179,0,0.2)', color: '#f59e0b' }}
-        >
-          ⚠️ Chỉ mang tính tham khảo
+        <div className="flex flex-col sm:items-end gap-2">
+          {sentimentBadge}
+          <div
+            className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 bg-slate-900/40 border border-slate-800 w-fit"
+          >
+            ⚠️ Chỉ mang tính tham khảo
+          </div>
         </div>
       </div>
 
       {/* Forecast Chart */}
       <div className="glass-card p-4">
-        <div className="text-xs font-semibold text-slate-400 mb-3">📈 Biểu đồ vùng dự báo (80% confidence)</div>
-        <div className="overflow-x-auto">
-          <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
-            {/* Dải lưới */}
-            {[0, 0.33, 0.66, 1].map(p => {
-              const y = PT + cH - p * cH;
-              const v = minP + p * range;
-              return (
-                <g key={p}>
-                  <line x1={PL} y1={y} x2={W-5} y2={y} stroke="rgba(79,195,247,0.05)" strokeWidth="1" />
-                  <text x={PL-5} y={y+3} fill="#475569" fontSize="9" textAnchor="end">{(v/1000).toFixed(1)}k</text>
-                </g>
-              );
-            })}
-            {/* Vùng dự báo (band) */}
-            <path d={bandPath} fill={trend_color + '15'} />
-            {/* Đường upper/lower */}
-            <path d={upperPath} fill="none" stroke={trend_color + '50'} strokeWidth="1" strokeDasharray="3,3" />
-            <path d={lowerPath} fill="none" stroke={trend_color + '50'} strokeWidth="1" strokeDasharray="3,3" />
-            {/* Đường chính */}
-            <path d={linePath} fill="none" stroke={trend_color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Chấm từng phiên */}
-            {forecast.map((f, i) => (
-              <circle key={i} cx={toX(i)} cy={toY(f.predicted)} r="3" fill={trend_color} stroke="#0d1b2a" strokeWidth="1.5" />
-            ))}
-            {/* Nhãn ngày */}
-            {forecast.filter((_, i) => i === 0 || i === forecast.length - 1 || i % 3 === 0).map((f, _, arr) => {
-              const origIdx = forecast.indexOf(f);
-              return (
-                <text key={origIdx} x={toX(origIdx)} y={H - 5} fill="#475569" fontSize="8" textAnchor="middle">
-                  {f.date.slice(5)}
-                </text>
-              );
-            })}
-          </svg>
+        <div className="text-xs font-semibold text-slate-400 mb-2 flex items-center justify-between">
+          <span>📈 Biểu đồ vùng dự báo tương tác (80% confidence interval)</span>
+          <span className="text-[10px] text-slate-500">Rê chuột vào biểu đồ để xem chi tiết</span>
+        </div>
+        <div className="w-full h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={forecast}
+              margin={{ top: 15, right: 10, left: -10, bottom: 5 }}
+            >
+              <defs>
+                <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={trend_color} stopOpacity={0.25}/>
+                  <stop offset="95%" stopColor={trend_color} stopOpacity={0.05}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.05)" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(str) => {
+                  if (!str) return '';
+                  const parts = str.split('-');
+                  return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : str;
+                }}
+                stroke="#475569"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                dy={8}
+              />
+              <YAxis
+                domain={[minP, maxP]}
+                tickFormatter={(val) => `${(val / 1000).toFixed(1)}k`}
+                stroke="#475569"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                dx={-2}
+              />
+              <Tooltip content={<CustomForecastTooltip />} />
+              <Area
+                name="Vùng dao động"
+                type="monotone"
+                dataKey={['lower', 'upper']}
+                stroke="none"
+                fill="url(#forecastBand)"
+              />
+              <Line
+                name="Giá dự báo"
+                type="monotone"
+                dataKey="predicted"
+                stroke={trend_color}
+                strokeWidth={2.5}
+                dot={{ r: 3, stroke: "#0f172a", strokeWidth: 1.5, fill: trend_color }}
+                activeDot={{ r: 5, stroke: "#0f172a", strokeWidth: 2, fill: trend_color }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -182,36 +273,39 @@ const PredictionTab = ({ ticker, ohlcvData }) => {
       <div className="glass-card overflow-hidden">
         <div className="px-4 py-3 text-xs font-bold text-slate-300 border-b border-slate-800/50">Chi tiết dự báo từng phiên</div>
         <div className="divide-y divide-slate-800/30">
-          {forecast.map((f, i) => (
-            <div key={f.date} className="grid px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '100px 1fr 80px 80px 80px' }}>
-              <span className="text-slate-500 font-num">{f.date.slice(5)}</span>
-              <div className="flex items-center">
-                <div className="flex-1 h-1 rounded-full bg-slate-800 overflow-hidden max-w-[120px]">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, ((f.predicted - minP) / range) * 100))}%`,
-                      background: trend_color,
-                    }}
-                  />
+          {forecast.map((f, i) => {
+            const range = maxP - minP || 1;
+            return (
+              <div key={f.date} className="grid px-4 py-2.5 text-xs animate-fade-in" style={{ gridTemplateColumns: '100px 1fr 100px 100px 100px', alignItems: 'center' }}>
+                <span className="text-slate-500 font-num">{f.date.split('-').reverse().join('/')}</span>
+                <div className="flex items-center">
+                  <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden max-w-[120px]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, ((f.predicted - minP) / range) * 100))}%`,
+                        background: trend_color,
+                      }}
+                    />
+                  </div>
                 </div>
+                <span className="font-extrabold font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#4ade80' : '#f87171' }}>
+                  {(f.predicted).toLocaleString()} ₫
+                </span>
+                <span className="text-slate-500 font-num text-right">{(f.lower).toLocaleString()} ₫</span>
+                <span className="text-slate-500 font-num text-right">{(f.upper).toLocaleString()} ₫</span>
               </div>
-              <span className="font-bold font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#4ade80' : '#f87171' }}>
-                {(f.predicted/1000).toFixed(2)}k
-              </span>
-              <span className="text-slate-600 font-num text-right">{(f.lower/1000).toFixed(1)}k</span>
-              <span className="text-slate-600 font-num text-right">{(f.upper/1000).toFixed(1)}k</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
-        <div className="px-4 py-2 text-[10px] text-slate-600 flex justify-between">
-          <span>Giá dự báo (k₫)</span>
-          <span>Vùng thấp — Vùng cao (80% CI)</span>
+        <div className="px-4 py-2.5 text-[10px] text-slate-500 flex justify-between bg-slate-900/10">
+          <span>Giá dự báo (₫)</span>
+          <span>Vùng dao động 80% CI (Thấp — Cao)</span>
         </div>
       </div>
 
       <p className="text-[10px] text-slate-600 text-center">
-        🤖 Model: Prophet (Meta) · Không phải khuyến nghị đầu tư · Chỉ mang tính tham khảo thống kê
+        🤖 Model: Prophet (Meta) · Tích hợp chỉ báo tâm lý tin tức từ CafeF · Không phải khuyến nghị đầu tư
       </p>
     </div>
   );
@@ -1178,6 +1272,7 @@ const AnalyzePage = () => {
                   <PredictionTab
                     ticker={currentParams?.ticker}
                     ohlcvData={stock1.ohlcv}
+                    sentimentData={sentimentData}
                   />
                 )}
               </div>

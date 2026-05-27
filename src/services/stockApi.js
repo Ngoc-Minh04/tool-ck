@@ -109,8 +109,12 @@ export const stockApi = {
     return res.data;
   },
 
-  async getPredict(ticker, periods = 10) {
-    const res = await api.get(`/stock/predict?ticker=${ticker.toUpperCase()}&periods=${periods}`);
+  async getPredict(ticker, periods = 10, sentimentScore = null) {
+    let url = `/stock/predict?ticker=${ticker.toUpperCase()}&periods=${periods}`;
+    if (sentimentScore !== null && sentimentScore !== undefined) {
+      url += `&sentiment_score=${sentimentScore}`;
+    }
+    const res = await api.get(url);
     return res.data?.data || res.data || {};
   },
 };

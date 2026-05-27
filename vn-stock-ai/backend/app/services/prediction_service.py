@@ -7,10 +7,11 @@ Cache kết quả 1 giờ.
 from loguru import logger
 
 
-def predict_price_prophet(ohlcv: list, periods: int = 10) -> dict:
+def predict_price_prophet(ohlcv: list, periods: int = 10, sentiment_score: float = None) -> dict:
     """
-    Dùng Prophet để dự đoán giá đóng cửa trong N phiên tiếp theo.
+    Dùng Prophet để dự đoán giá đóng cửa trong N phiên tiếp theo kèm điều chỉnh tâm lý tin tức.
     ohlcv: list of dict với keys: date, close
+    sentiment_score: điểm tâm lý tin tức từ -100 đến +100
     Trả về: forecast list + accuracy metrics
     """
     if not ohlcv or len(ohlcv) < 30:
@@ -59,12 +60,23 @@ def predict_price_prophet(ohlcv: list, periods: int = 10) -> dict:
 
         forecast = model.predict(future)
 
+        # Điều chỉnh xu hướng theo điểm tâm lý tin tức (nếu có)
+        drift_pct = 0.0
+        if sentiment_score is not None:
+            # Quy đổi điểm tâm lý (-100 đến +100) thành tỷ lệ trượt giá (drift)
+            # Tối đa +-2% trong vòng N phiên
+            drift_pct = (float(sentiment_score) / 100.0) * 0.02
+
         # Kết quả dự báo
         result_rows = []
-        for _, row in forecast.iterrows():
-            predicted = round(float(row["yhat"]))
-            lower = round(float(row["yhat_lower"]))
-            upper = round(float(row["yhat_upper"]))
+        for i, (_, row) in enumerate(forecast.iterrows()):
+            # Lượng dịch chuyển tăng dần theo thời gian (tuyến tính)
+            step_ratio = (i + 1) / periods
+            adjustment = last_price * (drift_pct * step_ratio)
+
+            predicted = round(float(row["yhat"]) + adjustment)
+            lower = round(float(row["yhat_lower"]) + adjustment)
+            upper = round(float(row["yhat_upper"]) + adjustment)
             change_pct = round((predicted - last_price) / last_price * 100, 2)
 
             result_rows.append({
