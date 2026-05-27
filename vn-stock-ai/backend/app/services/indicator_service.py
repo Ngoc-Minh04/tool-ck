@@ -122,6 +122,7 @@ def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 
     except Exception:
         df["signal"] = 0
 
+    logger.info(f"compute_backtest: strategy={strategy}, initial_capital={initial_capital}, data_points={len(df)}")
     capital = initial_capital
     position = 0
     trades = []
@@ -132,20 +133,23 @@ def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 
         price = df["close"].iloc[i]
         prev_sig = df["signal"].iloc[i-1]
 
-        if sig == 1 and prev_sig != 1 and capital > 0:
+        if sig == 1 and prev_sig != 1 and position == 0 and capital >= price:
             shares = int(capital / price)
-            position = shares
-            capital -= shares * price
-            trades.append({
-                "date": str(df["date"].iloc[i])[:10],
-                "type": "buy",
-                "price": price,
-                "shares": shares
-            })
+            if shares > 0:
+                position = shares
+                capital -= shares * price
+                logger.info(f"BUY: date={df['date'].iloc[i]}, price={price}, shares={shares}, remaining_capital={capital}")
+                trades.append({
+                    "date": str(df["date"].iloc[i])[:10],
+                    "type": "buy",
+                    "price": price,
+                    "shares": shares
+                })
         elif sig == -1 and position > 0:
             revenue = position * price
             entry_cost = trades[-1]["price"] * trades[-1]["shares"] if trades else 0
             pnl = revenue - entry_cost
+            logger.info(f"SELL: date={df['date'].iloc[i]}, price={price}, shares={position}, revenue={revenue}, pnl={pnl}")
             trades.append({
                 "date": str(df["date"].iloc[i])[:10],
                 "type": "sell",
@@ -159,6 +163,7 @@ def compute_backtest(ohlcv: List[dict], strategy: str, initial_capital: float = 
         total_value = capital + position * price
         equity_curve.append({"date": str(df["date"].iloc[i])[:10], "equity": round(total_value, 0)})
 
+    logger.info(f"compute_backtest finish: final_equity={equity_curve[-1]['equity']}, total_trades={len(trades)}")
     final_equity = equity_curve[-1]["equity"] if equity_curve else initial_capital
     total_return = ((final_equity - initial_capital) / initial_capital) * 100
 
