@@ -20,6 +20,8 @@ export function SupportResistanceLines({ sr }) {
           fill: '#00e676', 
           fontSize: 9, 
           position: 'insideBottomLeft',
+          dx: 15 + (i * 95), // Stagger horizontally to prevent overlap
+          dy: -2,
           fontFamily: 'JetBrains Mono, sans-serif'
         }}
       />
@@ -40,6 +42,8 @@ export function SupportResistanceLines({ sr }) {
           fill: '#ff5252', 
           fontSize: 9, 
           position: 'insideTopLeft',
+          dx: 15 + (i * 95), // Stagger horizontally to prevent overlap
+          dy: 2,
           fontFamily: 'JetBrains Mono, sans-serif'
         }}
       />
@@ -60,6 +64,8 @@ export function SupportResistanceLines({ sr }) {
           fill: '#ffb300', 
           fontSize: 9, 
           position: 'insideBottomRight',
+          dx: -15, // Shift left slightly to avoid clipping on the right
+          dy: -2,
           fontFamily: 'JetBrains Mono, sans-serif'
         }}
       />
