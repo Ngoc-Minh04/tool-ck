@@ -1779,8 +1779,75 @@ const AnalyzePage = () => {
               )}
             </div>
 
+            {/* Active Stock Key Metrics Card */}
+            {currentParams && stock1.info && (
+              <div className="glass-card p-4 space-y-3 animate-fade-in-up">
+                <div className="flex items-center gap-2 border-b border-slate-800/40 pb-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse-cyan" />
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                    Thông số cơ bản · {currentParams.ticker}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">Vốn hóa</span>
+                    <span className="font-extrabold text-slate-200 font-num">
+                      {stock1.info.fundamentals?.marketCap 
+                        ? `${(stock1.info.fundamentals.marketCap / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })} Tỷ`
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">P/E</span>
+                    <span className="font-extrabold text-slate-200 font-num">
+                      {stock1.info.fundamentals?.pe 
+                        ? stock1.info.fundamentals.pe.toFixed(2) 
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">P/B</span>
+                    <span className="font-extrabold text-slate-200 font-num">
+                      {stock1.info.fundamentals?.pb 
+                        ? stock1.info.fundamentals.pb.toFixed(2) 
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">EPS</span>
+                    <span className="font-extrabold text-slate-200 font-num">
+                      {stock1.info.fundamentals?.eps 
+                        ? `${Math.round(stock1.info.fundamentals.eps).toLocaleString()} ₫`
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">ROE / ROA</span>
+                    <span className="font-extrabold text-slate-200 font-num">
+                      {stock1.info.fundamentals?.roe 
+                        ? `${(stock1.info.fundamentals.roe * 100).toFixed(1)}%` 
+                        : 'N/A'} 
+                      &nbsp;/&nbsp;
+                      {stock1.info.fundamentals?.roa 
+                        ? `${(stock1.info.fundamentals.roa * 100).toFixed(1)}%` 
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">Khối ngoại GD</span>
+                    <span className={`font-extrabold font-num ${stock1.info.foreignNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {stock1.info.foreignNet 
+                        ? `${stock1.info.foreignNet >= 0 ? '+' : ''}${(stock1.info.foreignNet / 1e9).toFixed(1)} Tỷ`
+                        : '0 Tỷ'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Quick Access Card */}
-            <div className="glass-card p-4 space-y-4">
+            <div className="glass-card p-4 shadow-lg border border-slate-800/40">
               <div className="flex items-center justify-between border-b border-slate-800/40 pb-2 flex-wrap gap-2">
                 <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Activity size={14} className="text-cyan-400 animate-pulse-cyan" />
