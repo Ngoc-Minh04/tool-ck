@@ -43,6 +43,15 @@ const MessageBubble = ({ message }) => {
             borderRadius: isUser ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
           }}
         >
+          {message.image && (
+            <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-cyan-500/20 bg-slate-950/40">
+              <img
+                src={message.image.base64.startsWith('data:') ? message.image.base64 : `data:${message.image.mimeType};base64,${message.image.base64}`}
+                alt="Uploaded attachment"
+                className="max-h-60 w-auto object-contain rounded-lg"
+              />
+            </div>
+          )}
           {isUser ? (
             <p className="text-sm text-slate-200 whitespace-pre-wrap">{content}</p>
           ) : (

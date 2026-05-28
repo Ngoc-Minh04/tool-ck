@@ -75,9 +75,26 @@ async def _call_gemini(key: str, body: dict, stream: bool):
     
     for msg in body.get("messages", []):
         role = "user" if msg.get("role") == "user" else "model"
+        parts = []
+        if msg.get("image"):
+            img_data = msg["image"].get("base64", "")
+            img_type = msg["image"].get("mimeType", "image/png")
+            if "," in img_data:
+                img_data = img_data.split(",")[1]
+            if img_data:
+                parts.append({
+                    "inlineData": {
+                        "mimeType": img_type,
+                        "data": img_data
+                    }
+                })
+        content_text = msg.get("content", "")
+        if content_text or not parts:
+            parts.append({"text": content_text})
+            
         gemini_body["contents"].append({
             "role": role,
-            "parts": [{"text": msg.get("content", "")}]
+            "parts": parts
         })
 
     if stream:
@@ -190,10 +207,25 @@ async def _call_openai(key: str, body: dict, stream: bool):
         })
     
     for msg in body.get("messages", []):
-        openai_body["messages"].append({
-            "role": msg.get("role"),
-            "content": msg.get("content", "")
-        })
+        role = msg.get("role")
+        if msg.get("image"):
+            img_data = msg["image"].get("base64", "")
+            img_type = msg["image"].get("mimeType", "image/png")
+            if img_data:
+                if not img_data.startswith("data:"):
+                    img_data = f"data:{img_type};base64,{img_data}"
+                openai_body["messages"].append({
+                    "role": role,
+                    "content": [
+                        {"type": "text", "text": msg.get("content", "")},
+                        {"type": "image_url", "image_url": {"url": img_data}}
+                    ]
+                })
+        else:
+            openai_body["messages"].append({
+                "role": role,
+                "content": msg.get("content", "")
+            })
 
     headers = {
         "Content-Type": "application/json",
@@ -240,6 +272,42 @@ async def _call_openai(key: str, body: dict, stream: bool):
                 return {"error": f"OpenAI API Error: {str(e)}", "raw": res_json}
 
 
+def _format_claude_messages(body: dict) -> list:
+    """Format messages to Anthropic's expected multimodal structure if images are present."""
+    claude_messages = []
+    for msg in body.get("messages", []):
+        role = msg.get("role")
+        if msg.get("image"):
+            img_data = msg["image"].get("base64", "")
+            img_type = msg["image"].get("mimeType", "image/png")
+            if "," in img_data:
+                img_data = img_data.split(",")[1]
+            if img_data:
+                claude_messages.append({
+                    "role": role,
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img_type,
+                                "data": img_data
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": msg.get("content", "")
+                        }
+                    ]
+                })
+        else:
+            claude_messages.append({
+                "role": role,
+                "content": msg.get("content", "")
+            })
+    return claude_messages
+
+
 @router.post("/analyze")
 async def analyze(request: Request):
     """Proxy endpoint cho AI analysis — tự động nhận diện và định tuyến tới Claude, Gemini hoặc ChatGPT."""
@@ -265,6 +333,7 @@ async def analyze(request: Request):
         elif "sonnet" in body_model:
             claude_model = "claude-3-5-sonnet-20241022"
         body["model"] = claude_model
+        body["messages"] = _format_claude_messages(body)
 
         if stream:
             async def event_stream():
@@ -311,6 +380,7 @@ async def chat(request: Request):
         elif "sonnet" in body_model:
             claude_model = "claude-3-5-sonnet-20241022"
         body["model"] = claude_model
+        body["messages"] = _format_claude_messages(body)
 
         async def event_stream():
             async with httpx.AsyncClient(timeout=120) as client:

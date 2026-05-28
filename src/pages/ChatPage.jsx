@@ -1,7 +1,7 @@
 // ===== TRANG CHAT VỚI AI =====
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Plus, Trash2, MessageSquare, Globe, ChevronDown, Check } from 'lucide-react';
+import { Send, Plus, Trash2, MessageSquare, Globe, ChevronDown, Check, Paperclip, X } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import MessageBubble from '../components/Chat/MessageBubble';
 import QuickPrompts from '../components/Chat/QuickPrompts';
@@ -10,6 +10,7 @@ import useClaude from '../hooks/useClaude';
 import useAppStore from '../store/appStore';
 import { STOCK_ANALYST_SYSTEM_PROMPT } from '../constants/prompts';
 import { MODELS } from '../constants/sources';
+import toast from 'react-hot-toast';
 
 const ChatPage = () => {
   const [input, setInput] = useState('');
@@ -31,6 +32,29 @@ const ChatPage = () => {
 
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file hình ảnh (PNG, JPG, WEBP)!');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedImage({
+        base64: reader.result,
+        mimeType: file.type,
+        name: file.name
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -63,9 +87,11 @@ const ChatPage = () => {
 
   const handleSend = useCallback(async (text = input) => {
     const msg = text.trim();
-    if (!msg || loading) return;
+    if ((!msg && !selectedImage) || loading) return;
 
     setInput('');
+    const currentImg = selectedImage;
+    setSelectedImage(null);
 
     // Đảm bảo có session
     let sessionId = currentChatId;
@@ -74,12 +100,25 @@ const ChatPage = () => {
     }
 
     // Thêm user message
-    addChatMessage(sessionId, { role: 'user', content: msg });
+    const messagePayload = { role: 'user', content: msg };
+    if (currentImg) {
+      messagePayload.image = {
+        base64: currentImg.base64,
+        mimeType: currentImg.mimeType
+      };
+    }
+    addChatMessage(sessionId, messagePayload);
 
     // Lấy lịch sử messages
     const session = chatSessions.find(s => s.id === sessionId) || { messages: [] };
-    const historyMessages = [...(session.messages || []), { role: 'user', content: msg }]
-      .map(m => ({ role: m.role, content: m.content }))
+    const historyMessages = [...(session.messages || []), messagePayload]
+      .map(m => {
+        const item = { role: m.role, content: m.content };
+        if (m.image) {
+          item.image = m.image;
+        }
+        return item;
+      })
       .slice(-20); // Giới hạn 20 messages gần nhất
 
     // Gọi Claude
@@ -94,7 +133,7 @@ const ChatPage = () => {
 
     // Focus lại input
     inputRef.current?.focus();
-  }, [input, loading, currentChatId, chatSessions, createChatSession, addChatMessage, chat]);
+  }, [input, loading, currentChatId, chatSessions, createChatSession, addChatMessage, chat, selectedImage]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -205,25 +244,103 @@ const ChatPage = () => {
           className="p-4 space-y-3"
           style={{ borderTop: '1px solid rgba(79,195,247,0.08)', background: 'rgba(13,27,42,0.5)' }}
         >
-          <div className="flex flex-wrap justify-between items-center gap-2">
+          {/* Quick Prompts Row */}
+          <div className="flex justify-start">
             <QuickPrompts onSelect={(text) => handleSend(text)} disabled={loading} />
-            
-            <div className="flex items-center gap-2">
+          </div>
+
+          {/* Selected Image Preview (Thumbnail above input box) */}
+          {selectedImage && (
+            <div className="relative inline-block mb-1 p-1 rounded-lg border border-cyan-500/30 bg-slate-900/80">
+              <img
+                src={selectedImage.base64}
+                alt="Preview"
+                className="h-16 w-auto object-contain rounded"
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold border-none cursor-pointer hover:bg-red-600 transition-colors"
+                title="Hủy chọn ảnh"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="hidden"
+          />
+
+          {/* Unified Chat Frame (Khung Chat) */}
+          <div
+            className="flex items-center gap-3 px-3 py-2 rounded-2xl border transition-all"
+            style={{
+              background: 'rgba(13, 27, 42, 0.4)',
+              borderColor: 'rgba(79, 195, 247, 0.15)',
+              boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+            }}
+          >
+            {/* Attachment Button (+) on the left inside the chat frame */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              className="flex items-center justify-center rounded-xl cursor-pointer transition-all text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 disabled:opacity-40"
+              style={{
+                width: 36,
+                height: 36,
+                background: 'rgba(79, 195, 247, 0.05)',
+                border: '1px solid rgba(79, 195, 247, 0.1)',
+              }}
+              title="Thêm ảnh phân tích"
+            >
+              <Plus size={18} />
+            </button>
+
+            {/* Textarea in the middle inside the chat frame */}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Hỏi về cổ phiếu, thị trường... (Enter để gửi, Shift+Enter xuống dòng)"
+              rows={2}
+              className="flex-1 resize-none"
+              style={{
+                fontFamily: 'inherit',
+                lineHeight: 1.5,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                boxShadow: 'none',
+                color: '#e2e8f0',
+                padding: '6px 0',
+              }}
+            />
+
+            {/* Controls (Model Selector, Google Search, Send Button) on the right inside the chat frame */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               {/* Model Selector Dropdown */}
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
                   disabled={loading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-slate-300 hover:text-cyan-400 text-xs border bg-transparent"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all text-cyan-400 font-semibold text-xs border bg-transparent hover:bg-cyan-500/5"
                   style={{
-                    borderColor: 'rgba(79,195,247,0.15)',
-                    background: 'rgba(13,27,42,0.4)',
+                    borderColor: 'rgba(79, 195, 247, 0.2)',
+                    background: 'rgba(13, 27, 42, 0.6)',
                   }}
                   title="Chọn Model AI"
                 >
-                  <span className="text-cyan-400 font-semibold">{currentModel?.label || 'Chọn Model'}</span>
-                  <ChevronDown size={12} className="text-slate-400" />
+                  <span>{currentModel?.label ? currentModel.label.replace(' (Stable)', '') : 'Chọn Model'}</span>
+                  <ChevronDown size={11} className="text-cyan-400" />
                 </button>
 
                 {modelDropdownOpen && (
@@ -233,7 +350,7 @@ const ChatPage = () => {
                       background: 'rgba(15, 23, 42, 0.95)',
                       borderColor: 'rgba(79, 195, 247, 0.2)',
                       backdropFilter: 'blur(12px)',
-                      maxHeight: '350px',
+                      maxHeight: '300px',
                       overflowY: 'auto',
                     }}
                   >
@@ -279,43 +396,34 @@ const ChatPage = () => {
                 type="button"
                 onClick={() => updateSettings({ googleSearch: !settings.googleSearch })}
                 disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-slate-300 hover:text-cyan-400 text-xs border bg-transparent"
+                className="flex items-center justify-center rounded-lg cursor-pointer transition-all border bg-transparent hover:bg-cyan-500/5"
                 style={{
-                  borderColor: settings.googleSearch ? 'rgba(79,195,247,0.3)' : 'rgba(79,195,247,0.08)',
-                  background: settings.googleSearch ? 'rgba(79,195,247,0.1)' : 'rgba(13,27,42,0.4)',
+                  borderColor: 'rgba(79, 195, 247, 0.2)',
+                  background: 'rgba(13, 27, 42, 0.6)',
+                  width: 28,
+                  height: 28,
                 }}
-                title={settings.googleSearch ? 'Tắt Tìm kiếm Google' : 'Bật Tìm kiếm Google'}
+                title={settings.googleSearch ? 'Tìm kiếm Google: BẬT' : 'Tìm kiếm Google: TẮT'}
               >
                 <Globe size={13} className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'} />
-                <span>Tìm kiếm Google: <strong className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'}>{settings.googleSearch ? 'BẬT' : 'TẮT'}</strong></span>
+              </button>
+
+              {/* Send Button */}
+              <button
+                type="button"
+                onClick={() => handleSend()}
+                disabled={(!input.trim() && !selectedImage) || loading}
+                className="flex items-center justify-center rounded-lg cursor-pointer border-none transition-all disabled:opacity-40"
+                style={{
+                  width: 28,
+                  height: 28,
+                  background: 'linear-gradient(135deg, #1a3a5c, #4fc3f7)',
+                  color: '#0d1b2a',
+                }}
+              >
+                {loading ? <LoadingDots size="sm" color="white" /> : <Send size={14} />}
               </button>
             </div>
-          </div>
-
-          <div className="flex gap-3">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Hỏi về cổ phiếu, thị trường... (Enter để gửi, Shift+Enter xuống dòng)"
-              rows={2}
-              className="input-dark flex-1 resize-none"
-              style={{ fontFamily: 'inherit', lineHeight: 1.5 }}
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={!input.trim() || loading}
-              className="flex items-center justify-center rounded-xl cursor-pointer border-none transition-all disabled:opacity-40"
-              style={{
-                width: 52,
-                minHeight: 52,
-                background: 'linear-gradient(135deg, #1a3a5c, #4fc3f7)',
-                color: '#0d1b2a',
-              }}
-            >
-              {loading ? <LoadingDots size="sm" color="white" /> : <Send size={18} />}
-            </button>
           </div>
         </div>
       </div>
