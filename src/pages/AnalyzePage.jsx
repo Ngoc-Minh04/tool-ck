@@ -1398,6 +1398,10 @@ const AnalyzePage = () => {
 
   const [compareInput, setCompareInput] = useState('');
   const [sentimentLoading, setSentimentLoading] = useState(false);
+  const [quickAccessTab, setQuickAccessTab] = useState('history');
+
+  const history = useAppStore((s) => s.history);
+  const watchlistItems = useWatchlist((s) => s.items);
 
   const setResult = useCallback((val) => {
     const current = useAppStore.getState().activeAnalysis.result;
@@ -1558,6 +1562,15 @@ const AnalyzePage = () => {
       sources: settings.sources,
     });
   }, [currentParams, settings.sources, handleAnalyze]);
+
+  const handleSelectStock = useCallback((item) => {
+    handleAnalyze({
+      ticker: item.ticker,
+      exchange: item.exchange || 'HOSE',
+      timeframe: item.timeframe || 'T3',
+      sources: settings.sources
+    });
+  }, [handleAnalyze, settings.sources]);
 
   const hasKey = (settings.apiKey && !settings.apiKey.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && settings.apiKey.trim() !== '' && settings.apiKey !== 'sk-ant-api03-' && settings.apiKey !== 'your_key_here') ||
     (import.meta.env.VITE_ANTHROPIC_API_KEY && !import.meta.env.VITE_ANTHROPIC_API_KEY.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && import.meta.env.VITE_ANTHROPIC_API_KEY.trim() !== '' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'sk-ant-api03-' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'your_key_here');
@@ -1763,6 +1776,122 @@ const AnalyzePage = () => {
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+
+            {/* Quick Access Card */}
+            <div className="glass-card p-4 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800/40 pb-2 flex-wrap gap-2">
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity size={14} className="text-cyan-400 animate-pulse-cyan" />
+                  Truy cập nhanh
+                </span>
+                {/* Tabs to switch between Watchlist and History */}
+                <div className="flex gap-1 bg-slate-950/60 p-0.5 rounded-lg border border-slate-800/60">
+                  <button
+                    onClick={() => setQuickAccessTab('history')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      quickAccessTab === 'history'
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                  >
+                    Lịch sử
+                  </button>
+                  <button
+                    onClick={() => setQuickAccessTab('watchlist')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      quickAccessTab === 'watchlist'
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                  >
+                    Watchlist
+                  </button>
+                </div>
+              </div>
+
+              {quickAccessTab === 'history' ? (
+                /* History List */
+                history.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-6 italic">Chưa có lịch sử phân tích</p>
+                ) : (
+                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                    {history.slice(0, 8).map((h) => {
+                      const isBuy = h.signal === 'BUY';
+                      const isSell = h.signal === 'SELL';
+                      const badgeColor = isBuy ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' 
+                                      : isSell ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' 
+                                      : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+
+                      return (
+                        <div
+                          key={h.id}
+                          onClick={() => handleSelectStock(h)}
+                          className="p-2.5 rounded-xl border border-slate-800/40 bg-slate-900/10 hover:bg-slate-900/60 hover:border-cyan-500/25 transition-all duration-200 cursor-pointer flex items-center justify-between group"
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">{h.ticker}</span>
+                              <span className="text-[9px] text-slate-500 font-semibold px-1 rounded bg-slate-800/50">{h.exchange}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium truncate max-w-[140px] mt-0.5">
+                              {h.stockInfo?.company_name || 'N/A'}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border ${badgeColor}`}>
+                              {h.signal || 'HOLD'}
+                            </span>
+                            <span className="text-[8px] text-slate-500 font-mono">
+                              {new Date(h.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                /* Watchlist List */
+                watchlistItems.length === 0 ? (
+                  <div className="text-center py-6">
+                    <p className="text-xs text-slate-500 italic">Watchlist đang trống</p>
+                    <p className="text-[10px] text-slate-600 mt-1">Bấm nút "Theo dõi" khi phân tích để thêm mã</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                    {watchlistItems.map((w) => {
+                      const isBuy = w.lastSignal === 'BUY';
+                      const isSell = w.lastSignal === 'SELL';
+                      const badgeColor = isBuy ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' 
+                                      : isSell ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' 
+                                      : w.lastSignal ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                                      : 'text-slate-500 bg-slate-800/20 border-slate-850';
+
+                      return (
+                        <div
+                          key={w.ticker}
+                          onClick={() => handleSelectStock(w)}
+                          className="p-2.5 rounded-xl border border-slate-800/40 bg-slate-900/10 hover:bg-slate-900/60 hover:border-cyan-500/25 transition-all duration-200 cursor-pointer flex items-center justify-between group"
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">{w.ticker}</span>
+                              <span className="text-[9px] text-slate-500 font-semibold px-1 rounded bg-slate-800/50">{w.exchange}</span>
+                            </div>
+                            <span className="text-[8px] text-slate-500 block mt-0.5">
+                              Thêm lúc: {new Date(w.addedAt).toLocaleDateString('vi-VN')}
+                            </span>
+                          </div>
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border ${badgeColor}`}>
+                            {w.lastSignal || 'CHƯA CÓ'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
