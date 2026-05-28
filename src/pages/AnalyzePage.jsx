@@ -82,24 +82,24 @@ const CustomForecastTooltip = ({ active, payload }) => {
     const data = payload[0].payload;
     const isUp = data.change_pct_from_now >= 0;
     return (
-      <div className="p-3 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl shadow-xl">
-        <p className="text-[11px] font-bold text-slate-400 mb-1.5 font-num">
+      <div className="p-4 bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl animate-fade-in min-w-[180px]">
+        <p className="text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-wider font-num">
           {data.date.split('-').reverse().join('/')}
         </p>
-        <div className="space-y-1 text-xs">
-          <div className="flex justify-between items-center gap-6">
-            <span className="text-slate-500">Giá dự báo:</span>
-            <span className="font-extrabold text-slate-200 font-num">{(data.predicted).toLocaleString()} ₫</span>
+        <div className="space-y-1.5 text-xs">
+          <div className="flex justify-between items-center gap-4">
+            <span className="text-slate-400">Giá dự báo:</span>
+            <span className="font-extrabold text-slate-100 font-num">{(data.predicted).toLocaleString()} ₫</span>
           </div>
-          <div className="flex justify-between items-center gap-6">
+          <div className="flex justify-between items-center gap-4 text-[11px]">
             <span className="text-slate-500">Khoảng dao động:</span>
             <span className="font-medium text-slate-400 font-num">
               {(data.lower).toLocaleString()} - {(data.upper).toLocaleString()}
             </span>
           </div>
-          <div className="flex justify-between items-center gap-6 pt-1 border-t border-slate-800/40">
-            <span className="text-slate-500">Thay đổi dự tính:</span>
-            <span className={`font-extrabold font-num ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+          <div className="flex justify-between items-center gap-4 pt-1.5 border-t border-slate-800/60">
+            <span className="text-slate-400">Thay đổi dự tính:</span>
+            <span className={`font-extrabold font-num ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
               {isUp ? '+' : ''}{data.change_pct_from_now}%
             </span>
           </div>
@@ -130,10 +130,37 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
 
   const renderContent = () => {
     if (loading) return (
-      <div className="flex flex-col items-center justify-center py-16 animate-fade-in">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-cyan-400 border-t-transparent mb-3" />
-        <p className="text-sm text-slate-400">Prophet đang tính toán dự báo...</p>
-        <p className="text-xs text-slate-600 mt-1">Lần đầu có thể mất 15-30 giây</p>
+      <div className="space-y-4 animate-pulse">
+        {/* Pulsing Header Card skeleton */}
+        <div className="p-6 rounded-2xl bg-slate-900/20 border border-slate-800/40 h-28 flex flex-col justify-between">
+          <div className="h-3 bg-slate-800/60 rounded w-1/4 animate-pulse" />
+          <div className="h-6 bg-slate-800/40 rounded w-1/3 animate-pulse" />
+          <div className="h-3 bg-slate-800/40 rounded w-1/2 animate-pulse" />
+        </div>
+        
+        {/* Pulsing Chart skeleton */}
+        <div className="glass-card p-4 h-80 flex flex-col justify-between">
+          <div className="h-4 bg-slate-800/40 rounded w-1/3 animate-pulse" />
+          <div className="flex-1 flex items-end gap-2 pt-6 pb-2">
+            {[...Array(12)].map((_, idx) => (
+              <div
+                key={idx}
+                className="bg-slate-800/30 rounded-t w-full animate-pulse"
+                style={{ height: `${Math.sin(idx / 2) * 40 + 50}%` }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Pulsing Table skeleton */}
+        <div className="glass-card p-4 space-y-3">
+          <div className="h-4 bg-slate-800/40 rounded w-1/5 animate-pulse" />
+          <div className="space-y-2">
+            {[...Array(4)].map((_, idx) => (
+              <div key={idx} className="h-6 bg-slate-800/20 rounded w-full animate-pulse" />
+            ))}
+          </div>
+        </div>
       </div>
     );
 
@@ -195,32 +222,40 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
       <div className="space-y-4 animate-fade-in">
         {/* Header Card */}
         <div
-          className="p-4 rounded-2xl flex items-center justify-between gap-4 flex-wrap"
-          style={{
-            background: 'linear-gradient(135deg, rgba(13,27,42,0.9), rgba(6,40,60,0.7))',
-            border: `1px solid ${trend_color}30`,
-          }}
+          className="p-5 rounded-2xl flex items-center justify-between gap-4 flex-wrap bg-slate-900/60 backdrop-blur-md border border-slate-800/80 shadow-2xl relative overflow-hidden"
         >
-          <div>
-            <div className="text-[11px] text-slate-500 uppercase font-bold tracking-wider mb-1">Dự báo Prophet AI · {periods} phiên tới</div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-black" style={{ color: trend_color }}>{trend_label}</span>
+          {/* Ambient Glow Background Effect matching the trend color */}
+          <div
+            className="absolute top-0 right-0 w-36 h-36 rounded-full filter blur-[50px] opacity-10 pointer-events-none"
+            style={{ backgroundColor: trend_color }}
+          />
+          <div className="relative z-10">
+            <div className="text-[10px] text-slate-500 uppercase font-black tracking-wider mb-1">Dự báo Prophet AI · {periods} phiên tới</div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl font-black tracking-wide" style={{ color: trend_color }}>{trend_label}</span>
               <span
-                className="text-sm font-bold px-2 py-0.5 rounded-full"
+                className="text-xs font-black px-2.5 py-0.5 rounded-full"
                 style={{ color: trend_color, background: trend_color + '15' }}
               >
                 {change_pct_10_sessions >= 0 ? '+' : ''}{change_pct_10_sessions}%
               </span>
             </div>
-            <div className="text-xs text-slate-500 mt-1">
-              Giá hiện tại: <span className="text-slate-300 font-semibold font-num">{(last_price).toLocaleString()} ₫</span>
-              {accuracy_pct && <span className="ml-3">• Độ chính xác lịch sử: <span className="text-cyan-400 font-bold">{accuracy_pct}%</span></span>}
+            <div className="text-xs text-slate-400 mt-1.5 font-medium flex items-center gap-2">
+              <span>Giá hiện tại:</span>
+              <span className="text-slate-200 font-extrabold font-num">{(last_price).toLocaleString()} ₫</span>
+              {accuracy_pct && (
+                <>
+                  <span className="text-slate-700 font-bold">•</span>
+                  <span>Độ chính xác lịch sử:</span>
+                  <span className="text-cyan-400 font-black font-num">{accuracy_pct}%</span>
+                </>
+              )}
             </div>
           </div>
-          <div className="flex flex-col sm:items-end gap-2">
+          <div className="flex flex-col sm:items-end gap-2 relative z-10">
             {sentimentBadge}
             <div
-              className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 bg-slate-900/40 border border-slate-800 w-fit"
+              className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg text-slate-400 bg-slate-950/40 border border-slate-800/80 w-fit"
             >
               ⚠️ Chỉ mang tính tham khảo
             </div>
@@ -228,10 +263,13 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
         </div>
 
         {/* Forecast Chart */}
-        <div className="glass-card p-4">
-          <div className="text-xs font-semibold text-slate-400 mb-2 flex items-center justify-between">
-            <span>📈 Biểu đồ vùng dự báo tương tác (80% confidence interval)</span>
-            <span className="text-[10px] text-slate-500">Rê chuột vào biểu đồ để xem chi tiết</span>
+        <div className="glass-card p-5 relative overflow-hidden">
+          <div className="text-xs font-bold text-slate-300 mb-4 flex items-center justify-between flex-wrap gap-2">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-3 rounded bg-cyan-400" />
+              Biểu đồ vùng dự báo tương tác (80% confidence interval)
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium bg-slate-950/40 border border-slate-800/60 px-2 py-0.5 rounded-lg">Rê chuột vào để xem chi tiết</span>
           </div>
           <div className="w-full h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -241,11 +279,11 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
               >
                 <defs>
                   <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={trend_color} stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor={trend_color} stopOpacity={0.05}/>
+                    <stop offset="5%" stopColor={trend_color} stopOpacity={0.20}/>
+                    <stop offset="95%" stopColor={trend_color} stopOpacity={0.01}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.05)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.03)" vertical={false} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(str) => {
@@ -281,9 +319,9 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
                   type="monotone"
                   dataKey="predicted"
                   stroke={trend_color}
-                  strokeWidth={2.5}
-                  dot={{ r: 3, stroke: "#0f172a", strokeWidth: 1.5, fill: trend_color }}
-                  activeDot={{ r: 5, stroke: "#0f172a", strokeWidth: 2, fill: trend_color }}
+                  strokeWidth={3}
+                  dot={{ r: 4, stroke: "#0f172a", strokeWidth: 2, fill: trend_color }}
+                  activeDot={{ r: 6, stroke: "#0f172a", strokeWidth: 2.5, fill: "#ffffff" }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -292,15 +330,22 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
 
         {/* Forecast Table */}
         <div className="glass-card overflow-hidden">
-          <div className="px-4 py-3 text-xs font-bold text-slate-300 border-b border-slate-800/50">Chi tiết dự báo từng phiên</div>
-          <div className="divide-y divide-slate-800/30">
+          <div className="px-5 py-3.5 text-xs font-bold text-slate-200 border-b border-slate-800/50 flex items-center gap-2">
+            <span className="w-1.5 h-3 rounded bg-cyan-400" />
+            Chi tiết dự báo từng phiên
+          </div>
+          <div className="divide-y divide-slate-800/20">
             {forecast.map((f, i) => {
               const range = maxP - minP || 1;
               return (
-                <div key={f.date} className="grid px-4 py-2.5 text-xs animate-fade-in" style={{ gridTemplateColumns: '100px 1fr 100px 100px 100px', alignItems: 'center' }}>
-                  <span className="text-slate-500 font-num">{f.date.split('-').reverse().join('/')}</span>
+                <div
+                  key={f.date}
+                  className="grid px-5 py-3 text-xs hover:bg-slate-900/40 transition-all rounded-xl duration-200 cursor-default"
+                  style={{ gridTemplateColumns: '100px 1fr 100px 100px 100px', alignItems: 'center' }}
+                >
+                  <span className="text-slate-400 font-semibold font-num">{f.date.split('-').reverse().join('/')}</span>
                   <div className="flex items-center">
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden max-w-[120px]">
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-800/80 overflow-hidden max-w-[120px]">
                       <div
                         className="h-full rounded-full"
                         style={{
@@ -310,22 +355,22 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
                       />
                     </div>
                   </div>
-                  <span className="font-extrabold font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#4ade80' : '#f87171' }}>
+                  <span className="font-black font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#10b981' : '#ef4444' }}>
                     {(f.predicted).toLocaleString()} ₫
                   </span>
-                  <span className="text-slate-500 font-num text-right">{(f.lower).toLocaleString()} ₫</span>
-                  <span className="text-slate-500 font-num text-right">{(f.upper).toLocaleString()} ₫</span>
+                  <span className="text-slate-400 font-semibold font-num text-right">{(f.lower).toLocaleString()} ₫</span>
+                  <span className="text-slate-400 font-semibold font-num text-right">{(f.upper).toLocaleString()} ₫</span>
                 </div>
               );
             })}
           </div>
-          <div className="px-4 py-2.5 text-[10px] text-slate-500 flex justify-between bg-slate-900/10">
+          <div className="px-5 py-3 text-[10px] text-slate-500 font-semibold flex justify-between bg-slate-950/20">
             <span>Giá dự báo (₫)</span>
             <span>Vùng dao động 80% CI (Thấp — Cao)</span>
           </div>
         </div>
 
-        <p className="text-[10px] text-slate-600 text-center">
+        <p className="text-[10px] text-slate-500 text-center font-medium">
           🤖 Model: Prophet (Meta) · Tích hợp chỉ báo tâm lý tin tức từ CafeF · Không phải khuyến nghị đầu tư
         </p>
       </div>
@@ -346,7 +391,7 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
               key={p}
               onClick={() => setPeriods(p)}
               disabled={loading}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
                 periods === p
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 border border-transparent'
