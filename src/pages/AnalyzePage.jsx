@@ -112,6 +112,7 @@ const CustomForecastTooltip = ({ active, payload }) => {
 
 // ===== TAB DỰ BÁO GIÁ (PROPHET) =====
 const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
+  const [periods, setPeriods] = useState(10);
   const [predData, setPredData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -121,211 +122,243 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
     setLoading(true);
     setError(null);
     const score = sentimentData?.score;
-    stockApi.getPredict(ticker, 10, score)
+    stockApi.getPredict(ticker, periods, score)
       .then(res => { setPredData(res); })
       .catch(e => setError('Không thể tải dự báo. Thử lại sau.'))
       .finally(() => setLoading(false));
-  }, [ticker, sentimentData?.score]);
+  }, [ticker, sentimentData?.score, periods]);
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center py-16">
-      <div className="animate-spin rounded-full h-10 w-10 border-2 border-cyan-400 border-t-transparent mb-3" />
-      <p className="text-sm text-slate-400">Prophet đang tính toán dự báo...</p>
-      <p className="text-xs text-slate-600 mt-1">Lần đầu có thể mất 15-30 giây</p>
-    </div>
-  );
+  const renderContent = () => {
+    if (loading) return (
+      <div className="flex flex-col items-center justify-center py-16 animate-fade-in">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-cyan-400 border-t-transparent mb-3" />
+        <p className="text-sm text-slate-400">Prophet đang tính toán dự báo...</p>
+        <p className="text-xs text-slate-600 mt-1">Lần đầu có thể mất 15-30 giây</p>
+      </div>
+    );
 
-  if (error || !predData) return (
-    <div className="glass-card p-8 text-center">
-      <div className="text-4xl mb-3">🔮</div>
-      <p className="text-sm text-slate-400 mb-2">{error || 'Chưa có dữ liệu dự báo'}</p>
-      <p className="text-xs text-slate-500">Cần phân tích mã cổ phiếu trước</p>
-    </div>
-  );
+    if (error || !predData) return (
+      <div className="glass-card p-8 text-center animate-fade-in">
+        <div className="text-4xl mb-3">🔮</div>
+        <p className="text-sm text-slate-400 mb-2">{error || 'Chưa có dữ liệu dự báo'}</p>
+        <p className="text-xs text-slate-500">Cần phân tích mã cổ phiếu trước</p>
+      </div>
+    );
 
-  if (!predData.success) return (
-    <div className="glass-card p-6 text-center">
-      <div className="text-3xl mb-2">⚠️</div>
-      <p className="text-sm text-slate-400">{predData.error}</p>
-    </div>
-  );
+    if (!predData.success) return (
+      <div className="glass-card p-6 text-center animate-fade-in">
+        <div className="text-3xl mb-2">⚠️</div>
+        <p className="text-sm text-slate-400">{predData.error}</p>
+      </div>
+    );
 
-  const { forecast, trend_label, trend_color, change_pct_10_sessions, accuracy_pct, last_price } = predData;
+    const { forecast, trend_label, trend_color, change_pct_10_sessions, accuracy_pct, last_price } = predData;
 
-  const allPrices = forecast.flatMap(f => [f.lower, f.predicted, f.upper]);
-  const minP = Math.min(...allPrices) * 0.995;
-  const maxP = Math.max(...allPrices) * 1.005;
+    const allPrices = forecast.flatMap(f => [f.lower, f.predicted, f.upper]);
+    const minP = Math.min(...allPrices) * 0.995;
+    const maxP = Math.max(...allPrices) * 1.005;
 
-  let sentimentBadge = null;
-  if (sentimentData && sentimentData.score !== undefined && sentimentData.score !== null) {
-    const score = sentimentData.score;
-    if (score >= 10) {
-      sentimentBadge = (
-        <div className="text-xs px-3 py-1.5 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span>Tâm lý Tích cực (+{score}): Đã tối ưu hóa xu hướng tăng</span>
-        </div>
-      );
-    } else if (score <= -10) {
-      sentimentBadge = (
-        <div className="text-xs px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-          <span>Tâm lý Tiêu cực ({score}): Đã tối ưu hóa xu hướng giảm</span>
-        </div>
-      );
+    let sentimentBadge = null;
+    if (sentimentData && sentimentData.score !== undefined && sentimentData.score !== null) {
+      const score = sentimentData.score;
+      if (score >= 10) {
+        sentimentBadge = (
+          <div className="text-xs px-3 py-1.5 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span>Tâm lý Tích cực (+{score}): Đã tối ưu hóa xu hướng tăng</span>
+          </div>
+        );
+      } else if (score <= -10) {
+        sentimentBadge = (
+          <div className="text-xs px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+            <span>Tâm lý Tiêu cực ({score}): Đã tối ưu hóa xu hướng giảm</span>
+          </div>
+        );
+      } else {
+        sentimentBadge = (
+          <div className="text-xs px-3 py-1.5 rounded-xl bg-slate-500/10 border border-slate-500/30 text-slate-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-slate-400" />
+            <span>Tâm lý Trung tính ({score}): Giữ nguyên xu hướng gốc</span>
+          </div>
+        );
+      }
     } else {
       sentimentBadge = (
-        <div className="text-xs px-3 py-1.5 rounded-xl bg-slate-500/10 border border-slate-500/30 text-slate-400 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-slate-400" />
-          <span>Tâm lý Trung tính ({score}): Giữ nguyên xu hướng gốc</span>
+        <div className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-500/80 flex items-center gap-1">
+          <span>💡 Phân tích Tâm lý Tin tức để tối ưu hóa dự báo</span>
         </div>
       );
     }
-  } else {
-    sentimentBadge = (
-      <div className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-500/80 flex items-center gap-1">
-        <span>💡 Phân tích Tâm lý Tin tức để tối ưu hóa dự báo</span>
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {/* Header Card */}
+        <div
+          className="p-4 rounded-2xl flex items-center justify-between gap-4 flex-wrap"
+          style={{
+            background: 'linear-gradient(135deg, rgba(13,27,42,0.9), rgba(6,40,60,0.7))',
+            border: `1px solid ${trend_color}30`,
+          }}
+        >
+          <div>
+            <div className="text-[11px] text-slate-500 uppercase font-bold tracking-wider mb-1">Dự báo Prophet AI · {periods} phiên tới</div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-black" style={{ color: trend_color }}>{trend_label}</span>
+              <span
+                className="text-sm font-bold px-2 py-0.5 rounded-full"
+                style={{ color: trend_color, background: trend_color + '15' }}
+              >
+                {change_pct_10_sessions >= 0 ? '+' : ''}{change_pct_10_sessions}%
+              </span>
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              Giá hiện tại: <span className="text-slate-300 font-semibold font-num">{(last_price).toLocaleString()} ₫</span>
+              {accuracy_pct && <span className="ml-3">• Độ chính xác lịch sử: <span className="text-cyan-400 font-bold">{accuracy_pct}%</span></span>}
+            </div>
+          </div>
+          <div className="flex flex-col sm:items-end gap-2">
+            {sentimentBadge}
+            <div
+              className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 bg-slate-900/40 border border-slate-800 w-fit"
+            >
+              ⚠️ Chỉ mang tính tham khảo
+            </div>
+          </div>
+        </div>
+
+        {/* Forecast Chart */}
+        <div className="glass-card p-4">
+          <div className="text-xs font-semibold text-slate-400 mb-2 flex items-center justify-between">
+            <span>📈 Biểu đồ vùng dự báo tương tác (80% confidence interval)</span>
+            <span className="text-[10px] text-slate-500">Rê chuột vào biểu đồ để xem chi tiết</span>
+          </div>
+          <div className="w-full h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={forecast}
+                margin={{ top: 15, right: 10, left: -10, bottom: 5 }}
+              >
+                <defs>
+                  <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={trend_color} stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor={trend_color} stopOpacity={0.05}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.05)" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(str) => {
+                    if (!str) return '';
+                    const parts = str.split('-');
+                    return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : str;
+                  }}
+                  stroke="#475569"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                  dy={8}
+                />
+                <YAxis
+                  domain={[minP, maxP]}
+                  tickFormatter={(val) => `${(val / 1000).toFixed(1)}k`}
+                  stroke="#475569"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                  dx={-2}
+                />
+                <Tooltip content={<CustomForecastTooltip />} />
+                <Area
+                  name="Vùng dao động"
+                  type="monotone"
+                  dataKey={['lower', 'upper']}
+                  stroke="none"
+                  fill="url(#forecastBand)"
+                />
+                <Line
+                  name="Giá dự báo"
+                  type="monotone"
+                  dataKey="predicted"
+                  stroke={trend_color}
+                  strokeWidth={2.5}
+                  dot={{ r: 3, stroke: "#0f172a", strokeWidth: 1.5, fill: trend_color }}
+                  activeDot={{ r: 5, stroke: "#0f172a", strokeWidth: 2, fill: trend_color }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Forecast Table */}
+        <div className="glass-card overflow-hidden">
+          <div className="px-4 py-3 text-xs font-bold text-slate-300 border-b border-slate-800/50">Chi tiết dự báo từng phiên</div>
+          <div className="divide-y divide-slate-800/30">
+            {forecast.map((f, i) => {
+              const range = maxP - minP || 1;
+              return (
+                <div key={f.date} className="grid px-4 py-2.5 text-xs animate-fade-in" style={{ gridTemplateColumns: '100px 1fr 100px 100px 100px', alignItems: 'center' }}>
+                  <span className="text-slate-500 font-num">{f.date.split('-').reverse().join('/')}</span>
+                  <div className="flex items-center">
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden max-w-[120px]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, ((f.predicted - minP) / range) * 100))}%`,
+                          background: trend_color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <span className="font-extrabold font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#4ade80' : '#f87171' }}>
+                    {(f.predicted).toLocaleString()} ₫
+                  </span>
+                  <span className="text-slate-500 font-num text-right">{(f.lower).toLocaleString()} ₫</span>
+                  <span className="text-slate-500 font-num text-right">{(f.upper).toLocaleString()} ₫</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="px-4 py-2.5 text-[10px] text-slate-500 flex justify-between bg-slate-900/10">
+            <span>Giá dự báo (₫)</span>
+            <span>Vùng dao động 80% CI (Thấp — Cao)</span>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-slate-600 text-center">
+          🤖 Model: Prophet (Meta) · Tích hợp chỉ báo tâm lý tin tức từ CafeF · Không phải khuyến nghị đầu tư
+        </p>
       </div>
     );
-  }
+  };
 
   return (
     <div className="space-y-4 animate-fade-in-up">
-      {/* Header Card */}
-      <div
-        className="p-4 rounded-2xl flex items-center justify-between gap-4 flex-wrap"
-        style={{
-          background: 'linear-gradient(135deg, rgba(13,27,42,0.9), rgba(6,40,60,0.7))',
-          border: `1px solid ${trend_color}30`,
-        }}
-      >
-        <div>
-          <div className="text-[11px] text-slate-500 uppercase font-bold tracking-wider mb-1">Dự báo Prophet AI · 10 phiên tới</div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-black" style={{ color: trend_color }}>{trend_label}</span>
-            <span
-              className="text-sm font-bold px-2 py-0.5 rounded-full"
-              style={{ color: trend_color, background: trend_color + '15' }}
+      {/* Chọn khoảng thời gian dự báo */}
+      <div className="flex items-center justify-between gap-3 bg-slate-900/40 border border-slate-800/80 p-3 rounded-2xl flex-wrap">
+        <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+          <HelpCircle size={14} className="text-cyan-400" />
+          Khoảng thời gian dự báo tương lai:
+        </span>
+        <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800/60">
+          {[10, 20, 30].map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriods(p)}
+              disabled={loading}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                periods === p
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 border border-transparent'
+              }`}
             >
-              {change_pct_10_sessions >= 0 ? '+' : ''}{change_pct_10_sessions}%
-            </span>
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Giá hiện tại: <span className="text-slate-300 font-semibold font-num">{(last_price).toLocaleString()} ₫</span>
-            {accuracy_pct && <span className="ml-3">• Độ chính xác lịch sử: <span className="text-cyan-400 font-bold">{accuracy_pct}%</span></span>}
-          </div>
-        </div>
-        <div className="flex flex-col sm:items-end gap-2">
-          {sentimentBadge}
-          <div
-            className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 bg-slate-900/40 border border-slate-800 w-fit"
-          >
-            ⚠️ Chỉ mang tính tham khảo
-          </div>
+              {p} phiên
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Forecast Chart */}
-      <div className="glass-card p-4">
-        <div className="text-xs font-semibold text-slate-400 mb-2 flex items-center justify-between">
-          <span>📈 Biểu đồ vùng dự báo tương tác (80% confidence interval)</span>
-          <span className="text-[10px] text-slate-500">Rê chuột vào biểu đồ để xem chi tiết</span>
-        </div>
-        <div className="w-full h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={forecast}
-              margin={{ top: 15, right: 10, left: -10, bottom: 5 }}
-            >
-              <defs>
-                <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={trend_color} stopOpacity={0.25}/>
-                  <stop offset="95%" stopColor={trend_color} stopOpacity={0.05}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.05)" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(str) => {
-                  if (!str) return '';
-                  const parts = str.split('-');
-                  return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : str;
-                }}
-                stroke="#475569"
-                fontSize={10}
-                tickLine={false}
-                axisLine={false}
-                dy={8}
-              />
-              <YAxis
-                domain={[minP, maxP]}
-                tickFormatter={(val) => `${(val / 1000).toFixed(1)}k`}
-                stroke="#475569"
-                fontSize={10}
-                tickLine={false}
-                axisLine={false}
-                dx={-2}
-              />
-              <Tooltip content={<CustomForecastTooltip />} />
-              <Area
-                name="Vùng dao động"
-                type="monotone"
-                dataKey={['lower', 'upper']}
-                stroke="none"
-                fill="url(#forecastBand)"
-              />
-              <Line
-                name="Giá dự báo"
-                type="monotone"
-                dataKey="predicted"
-                stroke={trend_color}
-                strokeWidth={2.5}
-                dot={{ r: 3, stroke: "#0f172a", strokeWidth: 1.5, fill: trend_color }}
-                activeDot={{ r: 5, stroke: "#0f172a", strokeWidth: 2, fill: trend_color }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Forecast Table */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 text-xs font-bold text-slate-300 border-b border-slate-800/50">Chi tiết dự báo từng phiên</div>
-        <div className="divide-y divide-slate-800/30">
-          {forecast.map((f, i) => {
-            const range = maxP - minP || 1;
-            return (
-              <div key={f.date} className="grid px-4 py-2.5 text-xs animate-fade-in" style={{ gridTemplateColumns: '100px 1fr 100px 100px 100px', alignItems: 'center' }}>
-                <span className="text-slate-500 font-num">{f.date.split('-').reverse().join('/')}</span>
-                <div className="flex items-center">
-                  <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden max-w-[120px]">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, ((f.predicted - minP) / range) * 100))}%`,
-                        background: trend_color,
-                      }}
-                    />
-                  </div>
-                </div>
-                <span className="font-extrabold font-num text-right" style={{ color: f.change_pct_from_now >= 0 ? '#4ade80' : '#f87171' }}>
-                  {(f.predicted).toLocaleString()} ₫
-                </span>
-                <span className="text-slate-500 font-num text-right">{(f.lower).toLocaleString()} ₫</span>
-                <span className="text-slate-500 font-num text-right">{(f.upper).toLocaleString()} ₫</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="px-4 py-2.5 text-[10px] text-slate-500 flex justify-between bg-slate-900/10">
-          <span>Giá dự báo (₫)</span>
-          <span>Vùng dao động 80% CI (Thấp — Cao)</span>
-        </div>
-      </div>
-
-      <p className="text-[10px] text-slate-600 text-center">
-        🤖 Model: Prophet (Meta) · Tích hợp chỉ báo tâm lý tin tức từ CafeF · Không phải khuyến nghị đầu tư
-      </p>
+      {renderContent()}
     </div>
   );
 };
