@@ -474,7 +474,7 @@ const MarketPage = () => {
                           <td className={`py-1 px-1.5 font-num ${getPriceColorClass(row.low, row.ceil, row.floor, row.ref)}`}>
                             {row.low ? row.low.toLocaleString('vi-VN') : '-'}
                           </td>
-                          <td className="py-1 px-1.5 font-num text-cyan-400">{row.vol.toLocaleString('vi-VN')}</td>
+                          <td className="py-1 px-1.5 font-num text-cyan-400">{row.vol != null ? row.vol.toLocaleString('vi-VN') : '-'}</td>
                           <td className="py-1 px-1.5 font-num text-slate-400">{row.cap}</td>
                         </tr>
                       );

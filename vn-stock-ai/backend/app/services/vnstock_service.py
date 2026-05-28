@@ -735,8 +735,8 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
                         ceil_price = safe_val(row.get(('listing', 'ceiling')), price * 1.07)
                         floor_price = safe_val(row.get(('listing', 'floor')), price * 0.93)
                         open_price = safe_val(row.get(('match', 'open_price')), price)
-                        high_price = safe_val(row.get(('match', 'highest')), price)
-                        low_price = safe_val(row.get(('match', 'lowest')), price)
+                        high_price = safe_val(row.get(('match', 'highest')), 0.0)
+                        low_price = safe_val(row.get(('match', 'lowest')), 0.0)
                         volume = int(safe_val(row.get(('match', 'accumulated_volume')), 0.0))
                         
                         if price < 1000:
@@ -745,8 +745,18 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
                             ceil_price *= 1000
                             floor_price *= 1000
                             open_price *= 1000
-                            high_price *= 1000
-                            low_price *= 1000
+                            if high_price > 0:
+                                high_price *= 1000
+                            if low_price > 0:
+                                low_price *= 1000
+                        
+                        # Nếu high/low = 0 (đầu phiên chưa khớp lệnh), dùng price làm fallback
+                        if high_price <= 0:
+                            high_price = price
+                        if low_price <= 0:
+                            low_price = price
+                        if open_price <= 0:
+                            open_price = price
                             
                         change = price - ref_price
                         pct = (change / ref_price) * 100 if ref_price else 0
@@ -833,8 +843,8 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
                 ceil_price = safe_val(row.get(('listing', 'ceiling')), price * 1.07)
                 floor_price = safe_val(row.get(('listing', 'floor')), price * 0.93)
                 open_price = safe_val(row.get(('match', 'open_price')), price)
-                high_price = safe_val(row.get(('match', 'highest')), price)
-                low_price = safe_val(row.get(('match', 'lowest')), price)
+                high_price = safe_val(row.get(('match', 'highest')), 0.0)
+                low_price = safe_val(row.get(('match', 'lowest')), 0.0)
                 volume = int(safe_val(row.get(('match', 'accumulated_volume')), 0.0))
                 
                 if price < 1000:
@@ -843,8 +853,18 @@ def get_quick_quotes(ticker_list: list = None, df = None) -> list:
                     ceil_price *= 1000
                     floor_price *= 1000
                     open_price *= 1000
-                    high_price *= 1000
-                    low_price *= 1000
+                    if high_price > 0:
+                        high_price *= 1000
+                    if low_price > 0:
+                        low_price *= 1000
+                
+                # Nếu high/low = 0 (đầu phiên chưa khớp lệnh), dùng price làm fallback
+                if high_price <= 0:
+                    high_price = price
+                if low_price <= 0:
+                    low_price = price
+                if open_price <= 0:
+                    open_price = price
                     
                 change = price - ref_price
                 pct = (change / ref_price) * 100 if ref_price else 0
