@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 import httpx
+import asyncio
 import os
 import json
 from app.config import settings
@@ -83,42 +84,80 @@ async def _call_gemini(key: str, body: dict, stream: bool):
         async def event_stream():
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:streamGenerateContent?alt=sse&key={key}"
             async with httpx.AsyncClient(timeout=120) as client:
-                async with client.stream("POST", url, json=gemini_body) as r:
-                    if r.status_code != 200:
-                        err_content = await r.aread()
-                        logger.error(f"Gemini API returned status {r.status_code}: {err_content.decode('utf-8', errors='ignore')}")
-                        yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': f'Lỗi kết nối Gemini API ({r.status_code}).'}})}\n\n".encode("utf-8")
-                        yield b"data: [DONE]\n\n"
-                        return
-                    buffer = ""
-                    async for chunk in r.aiter_text():
-                        buffer += chunk
-                        while "\n" in buffer:
-                            line, buffer = buffer.split("\n", 1)
-                            line = line.strip()
-                            if not line.startswith("data: "):
+                for attempt in range(3):
+                    try:
+                        async with client.stream("POST", url, json=gemini_body) as r:
+                            if r.status_code == 503:
+                                if attempt == 2:
+                                    logger.error(f"[Stream] Gemini 503 overload failed after 3 attempts.")
+                                    yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': 'Google Gemini API hiện tại đang quá tải (503). Vui lòng thử lại sau.'}})}\n\n".encode("utf-8")
+                                    yield b"data: [DONE]\n\n"
+                                    return
+                                logger.warning(f"[Stream Attempt {attempt+1}] Gemini 503 overload. Retrying in {attempt+1}s...")
+                                await asyncio.sleep(attempt + 1)
                                 continue
-                            data_str = line[6:].strip()
-                            try:
-                                data_json = json.loads(data_str)
-                                text_delta = data_json["candidates"][0]["content"]["parts"][0]["text"]
-                                yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': text_delta}})}\n\n".encode("utf-8")
-                            except Exception:
-                                pass
+                            if r.status_code != 200:
+                                err_content = await r.aread()
+                                logger.error(f"Gemini API returned status {r.status_code}: {err_content.decode('utf-8', errors='ignore')}")
+                                yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': f'Lỗi kết nối Gemini API ({r.status_code}).'}})}\n\n".encode("utf-8")
+                                yield b"data: [DONE]\n\n"
+                                return
+                            buffer = ""
+                            async for chunk in r.aiter_text():
+                                buffer += chunk
+                                while "\n" in buffer:
+                                    line, buffer = buffer.split("\n", 1)
+                                    line = line.strip()
+                                    if not line.startswith("data: "):
+                                        continue
+                                    data_str = line[6:].strip()
+                                    try:
+                                        data_json = json.loads(data_str)
+                                        text_delta = data_json["candidates"][0]["content"]["parts"][0]["text"]
+                                        yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': text_delta}})}\n\n".encode("utf-8")
+                                    except Exception:
+                                        pass
+                            break
+                    except Exception as e:
+                        if attempt == 2:
+                            logger.error(f"Stream failed after 3 attempts: {e}")
+                            yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': f'Lỗi kết nối máy chủ: {str(e)}'}})}\n\n".encode("utf-8")
+                            yield b"data: [DONE]\n\n"
+                            return
+                        await asyncio.sleep(attempt + 1)
             yield b"data: [DONE]\n\n"
         return StreamingResponse(event_stream(), media_type="text/event-stream")
     else:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={key}"
         async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.post(url, json=gemini_body)
-            res_json = r.json()
-            if r.status_code != 200:
-                logger.error(f"Gemini API returned status {r.status_code}: {res_json}")
-                from fastapi.responses import JSONResponse
-                return JSONResponse(
-                    status_code=r.status_code,
-                    content={"error": {"message": res_json.get("error", {}).get("message", "Lỗi dịch vụ Gemini AI")}}
-                )
+            for attempt in range(3):
+                try:
+                    r = await client.post(url, json=gemini_body)
+                    res_json = r.json()
+                    if r.status_code == 503:
+                        if attempt == 2:
+                            logger.error(f"Gemini 503 overload failed after 3 attempts.")
+                            from fastapi.responses import JSONResponse
+                            return JSONResponse(
+                                status_code=503,
+                                content={"error": {"message": "Google Gemini API hiện tại đang quá tải (503). Vui lòng thử lại sau."}}
+                            )
+                        logger.warning(f"[Attempt {attempt+1}] Gemini 503 overload. Retrying in {attempt+1}s...")
+                        await asyncio.sleep(attempt + 1)
+                        continue
+                    if r.status_code != 200:
+                        logger.error(f"Gemini API returned status {r.status_code}: {res_json}")
+                        from fastapi.responses import JSONResponse
+                        return JSONResponse(
+                            status_code=r.status_code,
+                            content={"error": {"message": res_json.get("error", {}).get("message", "Lỗi dịch vụ Gemini AI")}}
+                        )
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        logger.error(f"Failed after 3 attempts: {e}")
+                        return {"error": f"Gemini API Error: {str(e)}", "raw": {}}
+                    await asyncio.sleep(attempt + 1)
             try:
                 text = res_json["candidates"][0]["content"]["parts"][0]["text"]
                 return {

@@ -1,7 +1,7 @@
 // ===== TRANG CHAT VỚI AI =====
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Plus, Trash2, MessageSquare, Globe } from 'lucide-react';
+import { Send, Plus, Trash2, MessageSquare, Globe, ChevronDown, Check } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import MessageBubble from '../components/Chat/MessageBubble';
 import QuickPrompts from '../components/Chat/QuickPrompts';
@@ -9,6 +9,7 @@ import { LoadingDots, EmptyState } from '../components/UI';
 import useClaude from '../hooks/useClaude';
 import useAppStore from '../store/appStore';
 import { STOCK_ANALYST_SYSTEM_PROMPT } from '../constants/prompts';
+import { MODELS } from '../constants/sources';
 
 const ChatPage = () => {
   const [input, setInput] = useState('');
@@ -27,6 +28,24 @@ const ChatPage = () => {
   } = useAppStore();
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
+
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const currentModel = MODELS.find((m) => m.value === settings?.model) || MODELS[3];
 
   const currentSession = getCurrentChat();
 
@@ -189,19 +208,88 @@ const ChatPage = () => {
           <div className="flex flex-wrap justify-between items-center gap-2">
             <QuickPrompts onSelect={(text) => handleSend(text)} disabled={loading} />
             
-            <button
-              onClick={() => updateSettings({ googleSearch: !settings.googleSearch })}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-slate-300 hover:text-cyan-400 text-xs border bg-transparent"
-              style={{
-                borderColor: settings.googleSearch ? 'rgba(79,195,247,0.3)' : 'rgba(79,195,247,0.08)',
-                background: settings.googleSearch ? 'rgba(79,195,247,0.1)' : 'rgba(13,27,42,0.4)',
-              }}
-              title={settings.googleSearch ? 'Tắt Tìm kiếm Google' : 'Bật Tìm kiếm Google'}
-            >
-              <Globe size={13} className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'} />
-              <span>Tìm kiếm Google: <strong className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'}>{settings.googleSearch ? 'BẬT' : 'TẮT'}</strong></span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Model Selector Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-slate-300 hover:text-cyan-400 text-xs border bg-transparent"
+                  style={{
+                    borderColor: 'rgba(79,195,247,0.15)',
+                    background: 'rgba(13,27,42,0.4)',
+                  }}
+                  title="Chọn Model AI"
+                >
+                  <span className="text-cyan-400 font-semibold">{currentModel?.label || 'Chọn Model'}</span>
+                  <ChevronDown size={12} className="text-slate-400" />
+                </button>
+
+                {modelDropdownOpen && (
+                  <div
+                    className="absolute right-0 bottom-full mb-2 w-72 rounded-xl border p-1 shadow-2xl z-50 transition-all duration-200"
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.95)',
+                      borderColor: 'rgba(79, 195, 247, 0.2)',
+                      backdropFilter: 'blur(12px)',
+                      maxHeight: '350px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    <div className="px-3 py-2 text-[10px] font-bold text-cyan-400 uppercase tracking-wider border-b border-cyan-500/10">
+                      Chọn mô hình AI
+                    </div>
+                    <div className="py-1">
+                      {MODELS.map((model) => {
+                        const isSelected = model.value === settings?.model;
+                        return (
+                          <button
+                            key={model.value}
+                            type="button"
+                            onClick={() => {
+                              updateSettings({ model: model.value });
+                              setModelDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-lg transition-all flex items-start gap-2 hover:bg-cyan-500/10 cursor-pointer border-none bg-transparent"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 justify-between">
+                                <span className={`text-xs font-medium ${isSelected ? 'text-cyan-400' : 'text-slate-200'}`}>
+                                  {model.label}
+                                </span>
+                                {isSelected && <Check size={12} className="text-cyan-400 flex-shrink-0" />}
+                              </div>
+                              {model.description && (
+                                <p className="text-[10px] text-slate-400 mt-0.5 leading-normal break-words whitespace-normal">
+                                  {model.description}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Google Search Toggle */}
+              <button
+                type="button"
+                onClick={() => updateSettings({ googleSearch: !settings.googleSearch })}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-slate-300 hover:text-cyan-400 text-xs border bg-transparent"
+                style={{
+                  borderColor: settings.googleSearch ? 'rgba(79,195,247,0.3)' : 'rgba(79,195,247,0.08)',
+                  background: settings.googleSearch ? 'rgba(79,195,247,0.1)' : 'rgba(13,27,42,0.4)',
+                }}
+                title={settings.googleSearch ? 'Tắt Tìm kiếm Google' : 'Bật Tìm kiếm Google'}
+              >
+                <Globe size={13} className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'} />
+                <span>Tìm kiếm Google: <strong className={settings.googleSearch ? 'text-cyan-400' : 'text-slate-500'}>{settings.googleSearch ? 'BẬT' : 'TẮT'}</strong></span>
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-3">
