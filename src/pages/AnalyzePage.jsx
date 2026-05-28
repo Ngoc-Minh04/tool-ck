@@ -1302,26 +1302,82 @@ const SentimentAnalysisTab = ({ data, news, loading, onAnalyze, ticker }) => {
 };
 
 const AnalyzePage = () => {
-  const [result, setResult] = useState(null);
-  const [currentParams, setCurrentParams] = useState(null);
-  const [chartPeriod, setChartPeriod] = useState('3M');
-  const [chartTab, setChartTab] = useState('candle');
-  const [infoTab, setInfoTab] = useState('result');
-  const [showBB, setShowBB] = useState(false);
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareTickers, setCompareTickers] = useState([]);
+  const activeAnalysis = useAppStore((s) => s.activeAnalysis);
+  const updateActiveAnalysis = useAppStore((s) => s.updateActiveAnalysis);
+
+  const {
+    result,
+    currentParams,
+    chartPeriod,
+    chartTab,
+    infoTab,
+    showBB,
+    compareMode,
+    compareTickers,
+    quarterlyData,
+    sentimentData,
+  } = activeAnalysis;
+
   const [compareInput, setCompareInput] = useState('');
-  const [quarterlyData, setQuarterlyData] = useState(null);
-  const [sentimentData, setSentimentData] = useState(null);
   const [sentimentLoading, setSentimentLoading] = useState(false);
+
+  const setResult = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.result;
+    updateActiveAnalysis({ result: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setCurrentParams = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.currentParams;
+    updateActiveAnalysis({ currentParams: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setChartPeriod = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.chartPeriod;
+    updateActiveAnalysis({ chartPeriod: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setChartTab = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.chartTab;
+    updateActiveAnalysis({ chartTab: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setInfoTab = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.infoTab;
+    updateActiveAnalysis({ infoTab: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setShowBB = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.showBB;
+    updateActiveAnalysis({ showBB: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setCompareMode = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.compareMode;
+    updateActiveAnalysis({ compareMode: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setCompareTickers = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.compareTickers;
+    updateActiveAnalysis({ compareTickers: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setQuarterlyData = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.quarterlyData;
+    updateActiveAnalysis({ quarterlyData: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
+
+  const setSentimentData = useCallback((val) => {
+    const current = useAppStore.getState().activeAnalysis.sentimentData;
+    updateActiveAnalysis({ sentimentData: typeof val === 'function' ? val(current) : val });
+  }, [updateActiveAnalysis]);
 
   const [searchParams] = useSearchParams();
 
   const { loading: aiLoading, analyze } = useClaude();
-  const stock1 = useStockData(); // Mã chính
-  const stock2 = useStockData(); // Mã phụ 1
-  const stock3 = useStockData(); // Mã phụ 2
-  const stock4 = useStockData(); // Mã phụ 3
+  const stock1 = useStockData('stock1'); // Mã chính
+  const stock2 = useStockData('stock2'); // Mã phụ 1
+  const stock3 = useStockData('stock3'); // Mã phụ 2
+  const stock4 = useStockData('stock4'); // Mã phụ 3
 
   const addToHistory = useAppStore((s) => s.addToHistory);
   const updateSignal = useWatchlist((s) => s.updateSignal);
@@ -1465,10 +1521,23 @@ const AnalyzePage = () => {
             summary: 'Đã xảy ra lỗi khi chuyển đổi kết quả phân tích AI thành cấu trúc dữ liệu.'
           });
         }
+      } else {
+        setSentimentData({
+          score: 0,
+          label: 'NEUTRAL',
+          bullets: ['Lỗi cuộc gọi AI (Không nhận được phản hồi từ mô hình).'],
+          summary: 'Không nhận được kết quả phân tích tâm lý từ AI (vượt giới hạn cuộc gọi hoặc lỗi API).'
+        });
       }
     } catch (err) {
       console.error("Error analyzing news sentiment:", err);
       toast.error("Lỗi phân tích tâm lý tin tức!");
+      setSentimentData({
+        score: 0,
+        label: 'NEUTRAL',
+        bullets: ['Lỗi kết nối hoặc giới hạn API.'],
+        summary: 'Không thể phân tích tâm lý tin tức do lỗi cuộc gọi AI.'
+      });
     } finally {
       setSentimentLoading(false);
     }

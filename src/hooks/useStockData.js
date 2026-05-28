@@ -3,18 +3,47 @@ import { stockApi } from '../services/stockApi';
 import { generateMockOHLCV } from '../utils/mockData';
 import { compute_indicators_client, enrichOHLCV } from '../utils/indicators';
 import toast from 'react-hot-toast';
+import useAppStore from '../store/appStore';
 
-export function useStockData() {
-  const [ohlcv, setOhlcv] = useState([]);
-  const [info, setInfo] = useState(null);
-  const [technicals, setTechnicals] = useState(null);
-  const [sr, setSr] = useState(null);
-  const [news, setNews] = useState([]);
+export function useStockData(storeKey) {
+  // If storeKey is provided, use Zustand store. Otherwise, fallback to React state.
+  const storeState = useAppStore(s => storeKey ? s.activeAnalysis[`${storeKey}Data`] : null);
+  const updateActiveAnalysis = useAppStore(s => s.updateActiveAnalysis);
+
+  const [localOhlcv, setLocalOhlcv] = useState([]);
+  const [localInfo, setLocalInfo] = useState(null);
+  const [localTechnicals, setLocalTechnicals] = useState(null);
+  const [localSr, setLocalSr] = useState(null);
+  const [localNews, setLocalNews] = useState([]);
+
+  const ohlcv = storeKey && storeState ? storeState.ohlcv : localOhlcv;
+  const info = storeKey && storeState ? storeState.info : localInfo;
+  const technicals = storeKey && storeState ? storeState.technicals : localTechnicals;
+  const sr = storeKey && storeState ? storeState.sr : localSr;
+  const news = storeKey && storeState ? storeState.news : localNews;
+
   const [loading, setLoading] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [backendOk, setBackendOk] = useState(null);
 
-  const _loadMockData = (ticker, period) => {
+  const updateStockData = useCallback((updates) => {
+    if (storeKey) {
+      updateActiveAnalysis({
+        [`${storeKey}Data`]: {
+          ...useAppStore.getState().activeAnalysis[`${storeKey}Data`],
+          ...updates
+        }
+      });
+    } else {
+      if ('ohlcv' in updates) setLocalOhlcv(updates.ohlcv);
+      if ('info' in updates) setLocalInfo(updates.info);
+      if ('technicals' in updates) setLocalTechnicals(updates.technicals);
+      if ('sr' in updates) setLocalSr(updates.sr);
+      if ('news' in updates) setLocalNews(updates.news);
+    }
+  }, [storeKey, updateActiveAnalysis]);
+
+  const _loadMockData = useCallback((ticker, period) => {
     const days = period === '1mo' || period === '1M' ? 30 
                : period === '6mo' || period === '6M' ? 180 
                : period === '1y' || period === '1Y' ? 365 
@@ -65,20 +94,22 @@ export function useStockData() {
       foreignNet: 0,
     };
 
-    setOhlcv(mockData);
-    setIsOffline(true);
-    setTechnicals(techObj);
-    setInfo(infoObj);
-    setSr({
-      current_price: currentPrice,
-      pivot_points: { pivot: pivots.PP, r1: pivots.R1, r2: pivots.R2, s1: pivots.S1, s2: pivots.S2 },
-      supports: [pivots.S1, pivots.S2].filter(Boolean),
-      resistances: [pivots.R1, pivots.R2].filter(Boolean),
-      swing_highs: [], swing_lows: [], volume_zones: [],
+    updateStockData({
+      ohlcv: mockData,
+      technicals: techObj,
+      info: infoObj,
+      sr: {
+        current_price: currentPrice,
+        pivot_points: { pivot: pivots.PP, r1: pivots.R1, r2: pivots.R2, s1: pivots.S1, s2: pivots.S2 },
+        supports: [pivots.S1, pivots.S2].filter(Boolean),
+        resistances: [pivots.R1, pivots.R2].filter(Boolean),
+        swing_highs: [], swing_lows: [], volume_zones: [],
+      },
+      news: []
     });
-    setNews([]);
+    setIsOffline(true);
     return { info: infoObj, technicals: techObj };
-  };
+  }, [updateStockData]);
 
   const fetchAll = useCallback(async (ticker, period = '3mo') => {
     setLoading(true);
@@ -95,7 +126,6 @@ export function useStockData() {
         ]);
         
         const enrichedOhlcv = enrichOHLCV(fullData.ohlcv || []);
-        setOhlcv(enrichedOhlcv);
         const lastBar = enrichedOhlcv[enrichedOhlcv.length - 1] || {};
         const prevBar = enrichedOhlcv[enrichedOhlcv.length - 2] || lastBar;
         const currentPrice = lastBar.close || 0;
@@ -120,10 +150,13 @@ export function useStockData() {
           foreignNet: fullData.info?.foreign_net || 0,
         };
 
-        setInfo(infoObj);
-        setTechnicals(fullData.technicals || null);
-        setSr(srData || null);
-        setNews(newsData || []);
+        updateStockData({
+          ohlcv: enrichedOhlcv,
+          info: infoObj,
+          technicals: fullData.technicals || null,
+          sr: srData || null,
+          news: newsData || []
+        });
         setIsOffline(false);
         return { info: infoObj, technicals: fullData.technicals || null };
       } else {
@@ -140,25 +173,25 @@ export function useStockData() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [storeKey, updateStockData, _loadMockData]);
 
   const fetchOHLCV = useCallback(async (ticker, period = '3mo') => {
     setLoading(true);
     try {
       const data = await stockApi.getOHLCV(ticker, period);
-      setOhlcv(data);
+      updateStockData({ ohlcv: data });
       return data;
     } catch (err) {
       const days = period === '1mo' || period === '1M' ? 30 
                  : period === '6mo' || period === '6M' ? 180 
                  : 90;
       const mock = enrichOHLCV(generateMockOHLCV(ticker, days));
-      setOhlcv(mock);
+      updateStockData({ ohlcv: mock });
       return mock;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateStockData]);
 
   return { ohlcv, info, technicals, sr, news, loading, isOffline, backendOk, fetchAll, fetchOHLCV };
 }

@@ -112,6 +112,49 @@ const useAppStore = create(
         return chatSessions.find((s) => s.id === currentChatId) || null;
       },
 
+      // ===== ACTIVE STOCK ANALYSIS STATE =====
+      activeAnalysis: {
+        result: null,
+        currentParams: null,
+        compareMode: false,
+        compareTickers: [],
+        quarterlyData: null,
+        sentimentData: null,
+        chartPeriod: '3M',
+        chartTab: 'candle',
+        infoTab: 'result',
+        showBB: false,
+        stock1Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+        stock2Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+        stock3Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+        stock4Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+      },
+
+      updateActiveAnalysis: (updates) =>
+        set((state) => ({
+          activeAnalysis: { ...state.activeAnalysis, ...updates },
+        })),
+
+      resetActiveAnalysis: () =>
+        set({
+          activeAnalysis: {
+            result: null,
+            currentParams: null,
+            compareMode: false,
+            compareTickers: [],
+            quarterlyData: null,
+            sentimentData: null,
+            chartPeriod: '3M',
+            chartTab: 'candle',
+            infoTab: 'result',
+            showBB: false,
+            stock1Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+            stock2Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+            stock3Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+            stock4Data: { ohlcv: [], info: null, technicals: null, sr: null, news: [] },
+          },
+        }),
+
       // ===== UI STATE (không persist) =====
       sidebarOpen: true,
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -133,6 +176,7 @@ const useAppStore = create(
         history: state.history,
         chatSessions: state.chatSessions,
         currentChatId: state.currentChatId,
+        activeAnalysis: state.activeAnalysis,
       }),
     }
   )
