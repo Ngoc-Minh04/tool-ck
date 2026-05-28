@@ -139,9 +139,24 @@ async def stock_news(ticker: str = Query(...)):
         return cached
     try:
         url = f"https://s.cafef.vn/Ajax/PageNew.ashx?symbol={ticker.upper()}&tintuc=1"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Referer": "https://cafef.vn/",
+            "X-Requested-With": "XMLHttpRequest"
+        }
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            data = r.json()
+            r = await client.get(url, headers=headers)
+            if r.status_code != 200:
+                logger.warning(f"CafeF returned status code {r.status_code} for {ticker}")
+                return []
+            
+            try:
+                data = r.json()
+            except Exception as json_err:
+                logger.warning(f"Failed to parse CafeF response as JSON for {ticker}: {json_err}. Raw response: {r.text[:100]}")
+                return []
+
             news = [
                 {
                     "title": item.get("Title", ""),

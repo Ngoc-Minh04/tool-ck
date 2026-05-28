@@ -1431,6 +1431,8 @@ const AnalyzePage = () => {
     compareTickers,
     quarterlyData,
     sentimentData,
+    predictionData,
+    backtestResult,
   } = activeAnalysis;
 
   const [compareInput, setCompareInput] = useState('');
@@ -1569,9 +1571,15 @@ const AnalyzePage = () => {
     ]);
 
     // Fetch quarterly tài chính song song (không block AI)
-    stockApi.getQuarterly(ticker)
-      .then(res => setQuarterlyData(res?.data || null))
-      .catch(() => setQuarterlyData(null));
+    let fetchedQuarterlyData = null;
+    const quarterlyPromise = stockApi.getQuarterly(ticker)
+      .then(res => {
+        fetchedQuarterlyData = res?.data || null;
+        setQuarterlyData(fetchedQuarterlyData);
+      })
+      .catch(() => {
+        setQuarterlyData(null);
+      });
 
     const prompt = buildAnalysisPrompt({
       ticker,
@@ -1588,8 +1596,39 @@ const AnalyzePage = () => {
 
     if (aiResult) {
       setResult(aiResult);
+
+      let signal = 'HOLD';
+      const textUpper = aiResult.toUpperCase();
+      if (textUpper.includes('MUA') || textUpper.includes('BUY') || textUpper.includes('KHUYẾN NGHỊ MUA')) {
+        signal = 'BUY';
+      } else if (textUpper.includes('BÁN') || textUpper.includes('SELL') || textUpper.includes('KHUYẾN NGHỊ BÁN')) {
+        signal = 'SELL';
+      }
+
+      await quarterlyPromise; // ensure quarterlyData fetch finished
+      const state = useAppStore.getState();
+      const currentStock1Data = state.activeAnalysis.stock1Data;
+
+      addToHistory({
+        ticker,
+        exchange,
+        timeframe,
+        result: aiResult,
+        stockInfo: currentStock1Data.info || liveData?.info || null,
+        signal,
+        ohlcv: currentStock1Data.ohlcv || [],
+        technicals: currentStock1Data.technicals || liveData?.technicals || null,
+        sr: currentStock1Data.sr || null,
+        news: currentStock1Data.news || [],
+        quarterlyData: fetchedQuarterlyData,
+        sentimentData: null,
+        predictionData: null,
+        backtestResult: null,
+      });
+
+      updateSignal(ticker, signal);
     }
-  }, [analyze, stock1.fetchAll, chartPeriod]);
+  }, [analyze, stock1.fetchAll, chartPeriod, addToHistory, updateSignal]);
 
   const handleReanalyze = useCallback(() => {
     if (!currentParams) return;
@@ -1602,13 +1641,61 @@ const AnalyzePage = () => {
   }, [currentParams, settings.sources, handleAnalyze]);
 
   const handleSelectStock = useCallback((item) => {
-    handleAnalyze({
-      ticker: item.ticker,
-      exchange: item.exchange || 'HOSE',
-      timeframe: item.timeframe || 'T3',
-      sources: settings.sources
-    });
-  }, [handleAnalyze, settings.sources]);
+    if (item.result) {
+      updateActiveAnalysis({
+        currentParams: { ticker: item.ticker, exchange: item.exchange, timeframe: item.timeframe },
+        result: item.result,
+        quarterlyData: item.quarterlyData || null,
+        sentimentData: item.sentimentData || null,
+        predictionData: item.predictionData || null,
+        backtestResult: item.backtestResult || null,
+        stock1Data: {
+          ohlcv: item.ohlcv || [],
+          info: item.stockInfo || null,
+          technicals: item.technicals || null,
+          sr: item.sr || null,
+          news: item.news || []
+        },
+        compareMode: false,
+        compareTickers: [],
+      });
+      toast.success(`Đã tải kết quả phân tích lịch sử của ${item.ticker}`);
+    } else {
+      const savedHistory = useAppStore.getState().history;
+      const existing = savedHistory.find(
+        (h) =>
+          h.ticker.toUpperCase() === item.ticker.toUpperCase() &&
+          (h.exchange || '').toUpperCase() === (item.exchange || 'HOSE').toUpperCase()
+      );
+      if (existing) {
+        updateActiveAnalysis({
+          currentParams: { ticker: existing.ticker, exchange: existing.exchange, timeframe: existing.timeframe },
+          result: existing.result,
+          quarterlyData: existing.quarterlyData || null,
+          sentimentData: existing.sentimentData || null,
+          predictionData: existing.predictionData || null,
+          backtestResult: existing.backtestResult || null,
+          stock1Data: {
+            ohlcv: existing.ohlcv || [],
+            info: existing.stockInfo || null,
+            technicals: existing.technicals || null,
+            sr: existing.sr || null,
+            news: existing.news || []
+          },
+          compareMode: false,
+          compareTickers: [],
+        });
+        toast.success(`Đã tải kết quả phân tích lịch sử của ${existing.ticker}`);
+      } else {
+        handleAnalyze({
+          ticker: item.ticker,
+          exchange: item.exchange || 'HOSE',
+          timeframe: item.timeframe || 'T3',
+          sources: settings.sources
+        });
+      }
+    }
+  }, [handleAnalyze, settings.sources, updateActiveAnalysis]);
 
   const hasKey = (settings.apiKey && !settings.apiKey.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && settings.apiKey.trim() !== '' && settings.apiKey !== 'sk-ant-api03-' && settings.apiKey !== 'your_key_here') ||
     (import.meta.env.VITE_ANTHROPIC_API_KEY && !import.meta.env.VITE_ANTHROPIC_API_KEY.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && import.meta.env.VITE_ANTHROPIC_API_KEY.trim() !== '' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'sk-ant-api03-' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'your_key_here');
@@ -1706,10 +1793,18 @@ const AnalyzePage = () => {
       result,
       stockInfo: stock1.info,
       signal,
+      ohlcv: stock1.ohlcv,
+      technicals: stock1.technicals,
+      sr: stock1.sr,
+      news: stock1.news,
+      quarterlyData,
+      sentimentData,
+      predictionData,
+      backtestResult,
     });
     updateSignal(currentParams.ticker, signal);
     toast.success('Đã lưu phân tích và cập nhật tín hiệu Watchlist!');
-  }, [result, currentParams, stock1.info, addToHistory, updateSignal]);
+  }, [result, currentParams, stock1, quarterlyData, sentimentData, predictionData, backtestResult, addToHistory, updateSignal]);
 
   const isLoading = aiLoading || stock1.loading;
 
@@ -1737,7 +1832,7 @@ const AnalyzePage = () => {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Left Column: Form */}
           <div className="xl:col-span-1 space-y-4">
-            <TickerForm onAnalyze={handleAnalyze} loading={isLoading} />
+            <TickerForm onAnalyze={handleAnalyze} onSelectStock={handleSelectStock} loading={isLoading} />
 
             {/* Compare Mode Toggle */}
             <div

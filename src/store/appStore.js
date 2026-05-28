@@ -44,16 +44,25 @@ const useAppStore = create(
       history: [],
 
       addToHistory: (entry) =>
-        set((state) => ({
-          history: [
-            {
-              id: Date.now().toString(),
-              timestamp: new Date().toISOString(),
-              ...entry,
-            },
-            ...state.history,
-          ].slice(0, 500), // Giới hạn 500 mục
-        })),
+        set((state) => {
+          const filteredHistory = state.history.filter(
+            (h) =>
+              !(
+                h.ticker.toUpperCase() === entry.ticker.toUpperCase() &&
+                (h.exchange || '').toUpperCase() === (entry.exchange || '').toUpperCase()
+              )
+          );
+          return {
+            history: [
+              {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                ...entry,
+              },
+              ...filteredHistory,
+            ].slice(0, 100),
+          };
+        }),
 
       removeFromHistory: (id) =>
         set((state) => ({

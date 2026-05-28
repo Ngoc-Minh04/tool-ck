@@ -8,7 +8,7 @@ import useAppStore from '../../store/appStore';
 import { EXCHANGES, TIMEFRAMES, POPULAR_TICKERS, TICKER_DIRECTORY } from '../../constants/sources';
 import { History } from 'lucide-react';
 
-const TickerForm = ({ onAnalyze, loading }) => {
+const TickerForm = ({ onAnalyze, onSelectStock, loading }) => {
   const settings = useAppStore((s) => s.settings);
   const toggleSource = useAppStore((s) => s.toggleSource);
   const history = useAppStore((s) => s.history);
@@ -250,10 +250,14 @@ const TickerForm = ({ onAnalyze, loading }) => {
               <button
                 key={h.id}
                 onClick={() => {
-                  setTicker(h.ticker);
-                  setDebouncedTicker(h.ticker);
-                  if (h.exchange) setExchange(h.exchange);
-                  if (h.timeframe) setTimeframe(h.timeframe);
+                  if (onSelectStock) {
+                    onSelectStock(h);
+                  } else {
+                    setTicker(h.ticker);
+                    setDebouncedTicker(h.ticker);
+                    if (h.exchange) setExchange(h.exchange);
+                    if (h.timeframe) setTimeframe(h.timeframe);
+                  }
                 }}
                 className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-xs transition-all text-left"
                 style={{
