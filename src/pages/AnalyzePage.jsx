@@ -113,20 +113,32 @@ const CustomForecastTooltip = ({ active, payload }) => {
 // ===== TAB DỰ BÁO GIÁ (PROPHET) =====
 const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
   const [periods, setPeriods] = useState(10);
-  const [predData, setPredData] = useState(null);
+  const predictionData = useAppStore(s => s.activeAnalysis.predictionData);
+  const updateActiveAnalysis = useAppStore(s => s.updateActiveAnalysis);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const predData = (predictionData && predictionData.ticker === ticker && predictionData.periods === periods)
+    ? predictionData.data
+    : null;
+
   useEffect(() => {
     if (!ticker) return;
+    if (predictionData && predictionData.ticker === ticker && predictionData.periods === periods) {
+      return;
+    }
     setLoading(true);
     setError(null);
     const score = sentimentData?.score;
     stockApi.getPredict(ticker, periods, score)
-      .then(res => { setPredData(res); })
+      .then(res => {
+        updateActiveAnalysis({
+          predictionData: { ticker, periods, data: res }
+        });
+      })
       .catch(e => setError('Không thể tải dự báo. Thử lại sau.'))
       .finally(() => setLoading(false));
-  }, [ticker, sentimentData?.score, periods]);
+  }, [ticker, sentimentData?.score, periods, predictionData, updateActiveAnalysis]);
 
   const renderContent = () => {
     if (loading) return (
@@ -444,9 +456,18 @@ const BacktestTab = ({ ticker }) => {
   const [strategy, setStrategy] = useState('ma_cross');
   const [period, setPeriod] = useState('1y');
   const [initialCapital, setInitialCapital] = useState(100000000);
+  const backtestResult = useAppStore(s => s.activeAnalysis.backtestResult);
+  const updateActiveAnalysis = useAppStore(s => s.updateActiveAnalysis);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
+
+  const result = (backtestResult &&
+                  backtestResult.ticker === ticker &&
+                  backtestResult.strategy === strategy &&
+                  backtestResult.period === period &&
+                  backtestResult.initialCapital === initialCapital)
+    ? backtestResult.data
+    : null;
 
   const formatCapital = (val) => {
     if (!val && val !== 0) return '';
@@ -462,7 +483,7 @@ const BacktestTab = ({ ticker }) => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
-    setResult(null);
+    updateActiveAnalysis({ backtestResult: null });
 
     const parsedCapital = typeof initialCapital === 'number'
       ? initialCapital
@@ -476,7 +497,15 @@ const BacktestTab = ({ ticker }) => {
     })
       .then(res => {
         if (res.total_trades !== undefined) {
-          setResult(res);
+          updateActiveAnalysis({
+            backtestResult: {
+              ticker,
+              strategy,
+              period,
+              initialCapital: parsedCapital,
+              data: res
+            }
+          });
         } else {
           setError('Không có kết quả kiểm thử nào được trả về.');
         }
@@ -492,7 +521,15 @@ const BacktestTab = ({ ticker }) => {
   };
 
   useEffect(() => {
-    handleRunBacktest();
+    const current = useAppStore.getState().activeAnalysis.backtestResult;
+    const isMatched = current &&
+                      current.ticker === ticker &&
+                      current.strategy === strategy &&
+                      current.period === period &&
+                      current.initialCapital === initialCapital;
+    if (!isMatched) {
+      handleRunBacktest();
+    }
   }, [ticker]);
 
   const STRATEGY_INFO = {
@@ -1525,6 +1562,7 @@ const AnalyzePage = () => {
     setCompareTickers([]); // Reset so sánh khi đổi mã chính
     setQuarterlyData(null);
     setSentimentData(null); // Reset dữ liệu tâm lý khi đổi mã phân tích chính
+    updateActiveAnalysis({ predictionData: null, backtestResult: null });
 
     const [liveData] = await Promise.all([
       stock1.fetchAll(ticker, chartPeriod),
