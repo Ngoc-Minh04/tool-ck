@@ -13,6 +13,7 @@ import { stockApi } from '../services/stockApi';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { TICKER_DIRECTORY } from '../constants/sources';
 
 // ===== POPULAR TICKERS FOR QUICK SELECTION =====
 const POPULAR_TICKERS = ['FPT', 'HPG', 'SSI', 'VND', 'MBB', 'TCB', 'VIC', 'VNM'];
@@ -585,6 +586,44 @@ const AlertsPage = () => {
   // Live formatting preview inside Form
   const formValuePreview = useMemo(() => formatPreview(price, condition), [price, condition]);
 
+  // Autocomplete suggestions
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const suggestions = useMemo(() => {
+    if (!ticker.trim()) return [];
+    const q = ticker.toUpperCase().trim();
+    return TICKER_DIRECTORY.filter((t) => {
+      return t.ticker.startsWith(q) || t.name.toUpperCase().includes(q);
+    }).slice(0, 8);
+  }, [ticker]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!dropdownRef.current?.contains(e.target)) setShowDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectSuggestion = useCallback((item) => {
+    setTicker(item.ticker);
+    setShowDropdown(false);
+    setActiveIdx(-1);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
+  const handleKeyDown = (e) => {
+    if (showDropdown && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)); return; }
+      if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); selectSuggestion(suggestions[activeIdx]); return; }
+      if (e.key === 'Escape') { setShowDropdown(false); return; }
+    }
+  };
+
   // Stats
   const totalAlerts = alerts.length;
   const waitingAlerts = alerts.filter(a => !a.triggered).length;
@@ -889,15 +928,61 @@ const AlertsPage = () => {
                     <label className="text-xs text-slate-500 font-medium">Mã cổ phiếu</label>
                     <span className="text-[10px] text-slate-600">Viết hoa tự động</span>
                   </div>
-                  <input
-                    type="text"
-                    value={ticker}
-                    onChange={e => setTicker(e.target.value.toUpperCase())}
-                    placeholder="Ví dụ: FPT"
-                    className="input-dark w-full text-sm focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20"
-                    maxLength={10}
-                    required
-                  />
+                  <div className="relative" ref={dropdownRef}>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={ticker}
+                      onChange={e => {
+                        setTicker(e.target.value.toUpperCase());
+                        setShowDropdown(true);
+                        setActiveIdx(-1);
+                      }}
+                      onFocus={() => ticker.trim() && setShowDropdown(true)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Ví dụ: FPT, VHM..."
+                      className="input-dark w-full text-sm focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20"
+                      maxLength={10}
+                      required
+                      autoComplete="off"
+                    />
+                    {/* Autocomplete Dropdown */}
+                    {showDropdown && suggestions.length > 0 && (
+                      <div
+                        className="absolute left-0 right-0 top-full mt-1 rounded-xl overflow-hidden animate-fadeIn shadow-lg shadow-black/60 border border-cyan-400/20"
+                        style={{
+                          background: '#0d1b2a',
+                          zIndex: 100,
+                        }}
+                      >
+                        {suggestions.map((s, idx) => (
+                          <div
+                            key={s.ticker}
+                            onMouseDown={() => selectSuggestion(s)}
+                            className="flex items-center justify-between px-3 py-2 cursor-pointer transition-all"
+                            style={{
+                              background: idx === activeIdx ? 'rgba(79,195,247,0.12)' : 'transparent',
+                              borderBottom: idx < suggestions.length - 1 ? '1px solid rgba(79,195,247,0.06)' : 'none',
+                            }}
+                            onMouseEnter={() => setActiveIdx(idx)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-cyan-300 w-10">{s.ticker}</span>
+                              <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{s.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-900 text-slate-500">
+                                {s.sector}
+                              </span>
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950/40 text-cyan-400 font-semibold">
+                                {s.exchange}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {/* Badges Chọn nhanh */}
                   <div className="flex flex-wrap gap-1 mt-2">
                     {POPULAR_TICKERS.map(tk => (
