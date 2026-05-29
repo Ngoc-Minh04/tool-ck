@@ -3,7 +3,7 @@ import httpx
 from app.services.vnstock_service import get_ohlcv, get_stock_info, get_quarterly_financials, Vnstock
 from app.services.indicator_service import compute_indicators, compute_backtest, compute_support_resistance
 from app.services.prediction_service import predict_price_prophet
-from app.services.cache_service import cache_get, cache_set
+from app.services.cache_service import cache_get, cache_set, get_stock_cache_ttl
 from app.models.schemas import BacktestRequest
 from loguru import logger
 
@@ -22,7 +22,7 @@ async def predict(ticker: str = Query(...), periods: int = 10, sentiment_score: 
     ohlcv_data = await run_in_threadpool(get_ohlcv, ticker, "2y", "1D")
     result = await run_in_threadpool(predict_price_prophet, ohlcv_data, periods, sentiment_score)
     result["ticker"] = ticker.upper()
-    await cache_set(key, result, ttl=3600)  # Cache 1 giờ
+    await cache_set(key, result, ttl=get_stock_cache_ttl(trading_ttl=300))
     return result
 
 
@@ -44,7 +44,7 @@ async def ohlcv(ticker: str = Query(...), period: str = "3mo", interval: str = "
     if cached:
         return cached
     data = get_ohlcv(ticker, period, interval)
-    await cache_set(key, data, ttl=300)
+    await cache_set(key, data, ttl=get_stock_cache_ttl(trading_ttl=120))
     return data
 
 
@@ -60,7 +60,7 @@ async def info(ticker: str = Query(...)):
     if cached:
         return cached
     data = get_stock_info(ticker)
-    await cache_set(key, data, ttl=3600)
+    await cache_set(key, data, ttl=get_stock_cache_ttl(trading_ttl=600))
     return data
 
 
@@ -78,7 +78,7 @@ async def technicals(ticker: str = Query(...), period: str = "3mo"):
     ohlcv_data = get_ohlcv(ticker, period)
     indicators = compute_indicators(ohlcv_data)
     result = {"ticker": ticker.upper(), **indicators}
-    await cache_set(key, result, ttl=300)
+    await cache_set(key, result, ttl=get_stock_cache_ttl(trading_ttl=120))
     return result
 
 
@@ -97,7 +97,7 @@ async def full_analysis(ticker: str = Query(...), period: str = "3mo"):
     info_data = get_stock_info(ticker)
     tech = compute_indicators(ohlcv_data)
     result = {"ohlcv": ohlcv_data, "info": info_data, "technicals": tech}
-    await cache_set(key, result, ttl=300)
+    await cache_set(key, result, ttl=get_stock_cache_ttl(trading_ttl=120))
     return result
 
 
@@ -127,7 +127,7 @@ async def support_resistance(ticker: str = Query(...), period: str = "3mo"):
     if not ohlcv_data:
         return {"supports": [], "resistances": [], "pivot_points": {}}
     result = compute_support_resistance(ohlcv_data)
-    await cache_set(key, result, ttl=300)
+    await cache_set(key, result, ttl=get_stock_cache_ttl(trading_ttl=120))
     return result
 
 
