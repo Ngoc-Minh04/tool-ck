@@ -201,7 +201,7 @@ _latest_signals: dict = {"buy_signals": [], "sell_signals": [], "scanned_at": No
 
 
 def _get_default_chat_id() -> str:
-    """Lấy telegram_chat_id đầu tiên có trong database."""
+    """Lấy telegram_chat_id đầu tiên có trong database hoặc từ config settings."""
     try:
         from app.services.database import get_all_alerts
         alerts = get_all_alerts()
@@ -210,7 +210,12 @@ def _get_default_chat_id() -> str:
             if cid:
                 return cid
     except Exception as e:
-        logger.warning(f"[Signal] Không lấy được Chat ID: {e}")
+        logger.warning(f"[Signal] Không lấy được Chat ID từ DB: {e}")
+    
+    # Fallback về cấu hình mặc định trong file .env
+    from app.config import settings
+    if settings.TELEGRAM_CHAT_ID:
+        return settings.TELEGRAM_CHAT_ID.strip()
     return ""
 
 
@@ -275,6 +280,10 @@ async def _run_signal_scan_and_notify(trigger: str = "schedule"):
             # Chỉ gửi các mã mới
             buy_to_send = [r for r in buy_list if r["ticker"] in new_buys and not _is_anti_spam(r["ticker"], "buy")]
             sell_to_send = [r for r in sell_list if r["ticker"] in new_sells and not _is_anti_spam(r["ticker"], "sell")]
+        elif trigger == "manual":
+            # Với manual (gửi thủ công): gửi toàn bộ danh sách hiện tại, không lọc anti-spam để người dùng thấy kết quả ngay
+            buy_to_send = list(buy_list)
+            sell_to_send = list(sell_list)
         else:
             # Với schedule: lọc anti-spam và gửi tất cả
             buy_to_send = [r for r in buy_list if not _is_anti_spam(r["ticker"], "buy")]
