@@ -1,10 +1,11 @@
-// ===== TRANG QUẢN LÝ CẢNH BÁO GIÁ =====
+// ===== TRANG QUẢN LÝ CẢNH BÁO GIÁ & KHỐI LƯỢNG (UX/UI OPTIMIZED) =====
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Bell, Trash2, Plus, AlertCircle, CheckCircle, Clock, BellOff, RotateCcw,
   X, Users, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown,
-  Edit3, Send, Zap, TrendingUp, TrendingDown, Trash, ShieldAlert
+  Edit3, Send, Zap, TrendingUp, TrendingDown, Trash, ShieldAlert,
+  Flame, Check, ArrowRight
 } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import { Button, EmptyState } from '../components/UI';
@@ -12,6 +13,9 @@ import { stockApi } from '../services/stockApi';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+
+// ===== POPULAR TICKERS FOR QUICK SELECTION =====
+const POPULAR_TICKERS = ['FPT', 'HPG', 'SSI', 'VND', 'MBB', 'TCB', 'VIC', 'VNM'];
 
 // ===== WEB PUSH NOTIFICATION HOOK =====
 const usePushNotification = () => {
@@ -81,12 +85,33 @@ function getConditionName(cond) {
   }
 }
 
+function getConditionBadgeStyle(cond) {
+  if (cond === 'above' || cond.includes('above') || cond.includes('up')) {
+    return { bg: 'rgba(74,222,128,0.1)', text: '#4ade80', border: 'rgba(74,222,128,0.2)' };
+  }
+  if (cond === 'below' || cond.includes('below') || cond.includes('down')) {
+    return { bg: 'rgba(248,113,113,0.1)', text: '#f87171', border: 'rgba(248,113,113,0.2)' };
+  }
+  return { bg: 'rgba(79,195,247,0.1)', text: '#4fc3f7', border: 'rgba(79,195,247,0.2)' };
+}
+
 function getTargetDisplay(al) {
   if (al.condition.includes('ma') || al.condition.startsWith('macd_')) return '—';
   if (al.condition.startsWith('pct_change_')) return `+${al.price}%`;
   if (al.condition.startsWith('rsi_')) return `${al.price} (RSI)`;
   if (al.condition === 'volume_above') return `${al.price.toLocaleString('vi-VN')} CP`;
   return `${al.price.toLocaleString('vi-VN')} đ`;
+}
+
+// Format Real-time preview helper
+function formatPreview(value, condition) {
+  if (!value || isNaN(value) || parseFloat(value) <= 0) return '';
+  const num = parseFloat(value);
+  if (condition.includes('ma') || condition.startsWith('macd_')) return '—';
+  if (condition.startsWith('pct_change_')) return `Biến động: +${num}%`;
+  if (condition.startsWith('rsi_')) return `Chỉ số RSI: ${num}`;
+  if (condition === 'volume_above') return `Khối lượng: ${num.toLocaleString('vi-VN')} Cổ phiếu`;
+  return `Giá mục tiêu: ${num.toLocaleString('vi-VN')} đ`;
 }
 
 // Tính toán % tiến độ đến điều kiện kích hoạt
@@ -111,7 +136,7 @@ function calcProgress(alert, currentPrice) {
   return null;
 }
 
-// ===== BIỂU ĐỒ MINI SPARKLINE =====
+// ===== BIỂU ĐỒ MINI SPARKLINE DẠNG AREA CHART CÓ GRADIENT & HIỆU ỨNG VẼ =====
 const Sparkline = ({ quote }) => {
   if (!quote || quote.high === undefined || quote.low === undefined || quote.open === undefined || quote.price === undefined) {
     return <div className="w-[45px] h-[15px]" />;
@@ -120,7 +145,7 @@ const Sparkline = ({ quote }) => {
   if (high === low) {
     return (
       <svg className="w-[45px] h-[15px]" style={{ overflow: 'visible' }}>
-        <line x1="0" y1="7.5" x2="45" y2="7.5" stroke="#64748b" strokeWidth="1.5" strokeDasharray="2,2" />
+        <line x1="0" y1="7.5" x2="45" y2="7.5" stroke="#475569" strokeWidth="1.5" strokeDasharray="2,2" />
       </svg>
     );
   }
@@ -135,11 +160,25 @@ const Sparkline = ({ quote }) => {
   const p2 = { x: 28, y: mapY(high) };
   const p3 = { x: 43, y: mapY(price) };
 
-  const color = price >= open ? '#4ade80' : '#f87171';
+  const isGreen = price >= open;
+  const color = isGreen ? '#4ade80' : '#f87171';
+  const gradientId = `spark-grad-${quote.ticker}`;
 
   return (
-    <div className="flex items-center" title={`Mở: ${open.toLocaleString()} | Thấp: ${low.toLocaleString()} | Cao: ${high.toLocaleString()} | Đóng: ${price.toLocaleString()}`}>
-      <svg className="w-[45px] h-[15px]" style={{ overflow: 'visible' }}>
+    <div className="flex items-center hover:scale-110 transition-transform duration-200 cursor-help" title={`Mở: ${open.toLocaleString()} | Thấp: ${low.toLocaleString()} | Cao: ${high.toLocaleString()} | Đóng: ${price.toLocaleString()}`}>
+      <svg className="w-[45px] h-[15px] overflow-visible">
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        {/* Gradient Fill under path */}
+        <path
+          d={`M ${p0.x} ${p0.y} L ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p3.x} 15 L ${p0.x} 15 Z`}
+          fill={`url(#${gradientId})`}
+        />
+        {/* Stroke Line */}
         <path
           d={`M ${p0.x} ${p0.y} L ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y}`}
           fill="none"
@@ -147,9 +186,21 @@ const Sparkline = ({ quote }) => {
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
+          style={{
+            strokeDasharray: 80,
+            strokeDashoffset: 0,
+            animation: 'sparkDraw 1.2s ease-out forwards'
+          }}
         />
         <circle cx={p3.x} cy={p3.y} r="2" fill={color} />
       </svg>
+      {/* Inline styles for line drawing animation */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes sparkDraw {
+          from { stroke-dashoffset: 80; }
+          to { stroke-dashoffset: 0; }
+        }
+      `}} />
     </div>
   );
 };
@@ -164,7 +215,7 @@ const DeleteConfirmModal = ({ alert, onConfirm, onCancel }) => {
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-sm rounded-2xl p-6 space-y-4"
+        className="w-full max-w-sm rounded-2xl p-6 space-y-4 transition-all scale-100 duration-200"
         style={{
           background: 'linear-gradient(135deg, #0d1b2a 0%, #1a2a3a 100%)',
           border: '1px solid rgba(239,68,68,0.25)',
@@ -174,7 +225,7 @@ const DeleteConfirmModal = ({ alert, onConfirm, onCancel }) => {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center animate-pulse" style={{ background: 'rgba(239,68,68,0.15)' }}>
               <Trash2 size={15} style={{ color: '#ef4444' }} />
             </div>
             <span className="text-sm font-semibold text-slate-200">Xác nhận xóa</span>
@@ -195,10 +246,10 @@ const DeleteConfirmModal = ({ alert, onConfirm, onCancel }) => {
         </p>
 
         <div className="flex gap-2 pt-1">
-          <button onClick={onCancel} className="flex-1 py-2 text-xs font-medium rounded-xl cursor-pointer border-none transition-all" style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
+          <button onClick={onCancel} className="flex-1 py-2 text-xs font-medium rounded-xl cursor-pointer border-none transition-all hover:bg-slate-800" style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
             Hủy bỏ
           </button>
-          <button onClick={onConfirm} className="flex-1 py-2 text-xs font-semibold rounded-xl cursor-pointer border-none transition-all" style={{ background: 'linear-gradient(135deg, #7f1d1d, #ef4444)', color: '#fff' }}>
+          <button onClick={onConfirm} className="flex-1 py-2 text-xs font-semibold rounded-xl cursor-pointer border-none transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg, #7f1d1d, #ef4444)', color: '#fff' }}>
             Xóa cảnh báo
           </button>
         </div>
@@ -227,7 +278,7 @@ const BulkDeleteConfirmModal = ({ isOpen, count, onConfirm, onCancel }) => {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center animate-bounce" style={{ background: 'rgba(239,68,68,0.15)' }}>
               <ShieldAlert size={15} style={{ color: '#ef4444' }} />
             </div>
             <span className="text-sm font-semibold text-slate-200">Xóa hàng loạt</span>
@@ -247,10 +298,10 @@ const BulkDeleteConfirmModal = ({ isOpen, count, onConfirm, onCancel }) => {
         </p>
 
         <div className="flex gap-2 pt-1">
-          <button onClick={onCancel} className="flex-1 py-2 text-xs font-medium rounded-xl cursor-pointer border-none transition-all" style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
+          <button onClick={onCancel} className="flex-1 py-2 text-xs font-medium rounded-xl cursor-pointer border-none transition-all hover:bg-slate-800" style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
             Hủy bỏ
           </button>
-          <button onClick={onConfirm} className="flex-1 py-2 text-xs font-semibold rounded-xl cursor-pointer border-none transition-all" style={{ background: 'linear-gradient(135deg, #7f1d1d, #ef4444)', color: '#fff' }}>
+          <button onClick={onConfirm} className="flex-1 py-2 text-xs font-semibold rounded-xl cursor-pointer border-none transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg, #7f1d1d, #ef4444)', color: '#fff' }}>
             Xóa {count} mục
           </button>
         </div>
@@ -273,6 +324,8 @@ const EditAlertModal = ({ alert, onSave, onCancel }) => {
   const isPercentageCondition = condition.startsWith('pct_change_');
   const isRsiCondition = condition.startsWith('rsi_');
   const isVolumeCondition = condition === 'volume_above';
+
+  const livePreview = useMemo(() => formatPreview(price, condition), [price, condition]);
 
   if (!alert) return null;
 
@@ -371,10 +424,15 @@ const EditAlertModal = ({ alert, onSave, onCancel }) => {
                 type="number"
                 value={price}
                 onChange={e => setPrice(e.target.value)}
-                className="input-dark w-full text-sm font-num"
+                className="input-dark w-full text-sm font-num focus:border-cyan-400"
                 min="0"
                 step="any"
               />
+              {livePreview && (
+                <span className="text-[10px] text-cyan-400 block mt-1.5 font-medium animate-fadeIn">
+                  {livePreview}
+                </span>
+              )}
             </div>
           )}
 
@@ -503,6 +561,7 @@ const AlertsPage = () => {
 
   // Test Telegram
   const [testingTelegram, setTestingTelegram] = useState(false);
+  const [testStatus, setTestStatus] = useState(null); // null | 'success' | 'error'
 
   const { permission, requestPermission, sendNotification } = usePushNotification();
   const triggeredAlertsRef = useRef(new Set());
@@ -522,6 +581,9 @@ const AlertsPage = () => {
   const isPercentageCondition = condition.startsWith('pct_change_');
   const isRsiCondition = condition.startsWith('rsi_');
   const isVolumeCondition = condition === 'volume_above';
+
+  // Live formatting preview inside Form
+  const formValuePreview = useMemo(() => formatPreview(price, condition), [price, condition]);
 
   // Stats
   const totalAlerts = alerts.length;
@@ -737,12 +799,15 @@ const AlertsPage = () => {
       return;
     }
     setTestingTelegram(true);
+    setTestStatus(null);
     try {
       await stockApi.testTelegram(telegramId.trim());
       toast.success('Đã gửi tin nhắn thử nghiệm! Kiểm tra Telegram của bạn.');
+      setTestStatus('success');
     } catch (err) {
       const msg = err?.response?.data?.detail || 'Gửi thất bại. Kiểm tra Bot Token và Chat ID.';
       toast.error(msg);
+      setTestStatus('error');
     } finally {
       setTestingTelegram(false);
     }
@@ -792,6 +857,11 @@ const AlertsPage = () => {
     }
   };
 
+  // Quick select ticker helper
+  const handleQuickSelectTicker = (tk) => {
+    setTicker(tk);
+  };
+
   return (
     <>
       {/* Modals */}
@@ -800,7 +870,7 @@ const AlertsPage = () => {
       <BulkDeleteConfirmModal isOpen={bulkDeleteOpen} count={selectedIds.length} onConfirm={handleExecuteBulkDelete} onCancel={() => setBulkDeleteOpen(false)} />
 
       <div className="flex flex-col h-full overflow-hidden">
-        <Header title="Cảnh báo giá & Khối lượng" />
+        <Header title="Cảnh báo thông minh" />
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -808,23 +878,43 @@ const AlertsPage = () => {
             {/* === CỘT TRÁI: FORM TẠO CẢNH BÁO === */}
             <div className="xl:col-span-1 glass-card p-5 space-y-4">
               <div className="flex items-center gap-2 pb-3" style={{ borderBottom: '1px solid rgba(79,195,247,0.08)' }}>
-                <Bell size={16} className="text-cyan-400" />
+                <Bell size={16} className="text-cyan-400 animate-pulse" />
                 <h3 className="text-sm font-semibold text-slate-200">Tạo cảnh báo mới</h3>
               </div>
 
               <form onSubmit={handleCreateAlert} className="space-y-4">
                 {/* Ticker */}
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1.5 font-medium">Mã cổ phiếu</label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="text-xs text-slate-500 font-medium">Mã cổ phiếu</label>
+                    <span className="text-[10px] text-slate-600">Viết hoa tự động</span>
+                  </div>
                   <input
                     type="text"
                     value={ticker}
                     onChange={e => setTicker(e.target.value.toUpperCase())}
                     placeholder="Ví dụ: FPT"
-                    className="input-dark w-full text-sm"
+                    className="input-dark w-full text-sm focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20"
                     maxLength={10}
                     required
                   />
+                  {/* Badges Chọn nhanh */}
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {POPULAR_TICKERS.map(tk => (
+                      <button
+                        key={tk}
+                        type="button"
+                        onClick={() => handleQuickSelectTicker(tk)}
+                        className="px-2 py-0.5 rounded text-[10px] bg-slate-900 text-slate-400 border border-slate-800 hover:border-cyan-400/40 hover:text-cyan-400 transition-all cursor-pointer"
+                        style={{
+                          background: ticker === tk ? 'rgba(79,195,247,0.1)' : '',
+                          borderColor: ticker === tk ? '#4fc3f7' : ''
+                        }}
+                      >
+                        {tk}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Condition */}
@@ -897,11 +987,16 @@ const AlertsPage = () => {
                       value={price}
                       onChange={e => setPrice(e.target.value)}
                       placeholder={isPercentageCondition ? 'Ví dụ: 5' : isRsiCondition ? 'Ví dụ: 30' : isVolumeCondition ? 'Ví dụ: 1000000' : 'Ví dụ: 75000'}
-                      className="input-dark w-full text-sm font-num"
+                      className="input-dark w-full text-sm font-num focus:border-cyan-400"
                       required
                       min="0"
                       step="any"
                     />
+                    {formValuePreview && (
+                      <span className="text-[10px] text-cyan-400 block mt-1.5 font-medium animate-fadeIn">
+                        {formValuePreview}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -917,23 +1012,34 @@ const AlertsPage = () => {
                       value={telegramId}
                       onChange={e => setTelegramId(e.target.value)}
                       placeholder="VD: 123456, -10098765"
-                      className="input-dark flex-1 text-sm font-num"
+                      className="input-dark flex-1 text-sm font-num focus:border-cyan-400"
                     />
                     <button
                       type="button"
                       onClick={handleTestTelegram}
                       disabled={testingTelegram || !telegramId.trim()}
                       title="Gửi tin nhắn thử để kiểm tra kết nối"
-                      className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold cursor-pointer border-none transition-all flex-shrink-0"
+                      className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-semibold cursor-pointer border-none transition-all flex-shrink-0"
                       style={{
-                        background: testingTelegram ? 'rgba(79,195,247,0.05)' : 'rgba(79,195,247,0.12)',
-                        color: '#4fc3f7',
-                        border: '1px solid rgba(79,195,247,0.25)',
+                        background: testingTelegram 
+                          ? 'rgba(79,195,247,0.05)' 
+                          : testStatus === 'success' 
+                            ? 'rgba(74,222,128,0.1)' 
+                            : testStatus === 'error'
+                              ? 'rgba(239,68,68,0.1)'
+                              : 'rgba(79,195,247,0.12)',
+                        color: testStatus === 'success' ? '#4ade80' : testStatus === 'error' ? '#f87171' : '#4fc3f7',
+                        border: `1px solid ${
+                          testStatus === 'success' 
+                            ? 'rgba(74,222,128,0.3)' 
+                            : testStatus === 'error'
+                              ? 'rgba(239,68,68,0.3)'
+                              : 'rgba(79,195,247,0.25)'
+                        }`,
                         opacity: (!telegramId.trim() || testingTelegram) ? 0.5 : 1
                       }}
                     >
-                      <Send size={10} />
-                      {testingTelegram ? '...' : 'Thử'}
+                      {testingTelegram ? '...' : testStatus === 'success' ? <Check size={11} /> : 'Thử'}
                     </button>
                   </div>
                   <div className="mt-1.5 space-y-0.5">
@@ -966,7 +1072,7 @@ const AlertsPage = () => {
 
                 <button
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg cursor-pointer border-none transition-all mt-2"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-semibold rounded-lg cursor-pointer border-none transition-all mt-2 hover:brightness-115 active:scale-98"
                   style={{ background: 'linear-gradient(135deg, #1a3a5c, #4fc3f7)', color: '#0d1b2a' }}
                 >
                   <Plus size={14} />
@@ -978,24 +1084,53 @@ const AlertsPage = () => {
             {/* === CỘT PHẢI: DANH SÁCH & TABS === */}
             <div className="xl:col-span-2 space-y-4">
 
-              {/* STATS PANELS */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl p-3 flex flex-col gap-1" style={{ background: 'rgba(79,195,247,0.06)', border: '1px solid rgba(79,195,247,0.12)' }}>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">Tổng cảnh báo</span>
-                  <span className="text-2xl font-bold text-slate-200 font-num">{totalAlerts}</span>
+              {/* STATS PANELS - GRADIENT OPTIMIZED */}
+              <div className="grid grid-cols-3 gap-4">
+                <div
+                  className="rounded-2xl p-4 flex flex-col gap-1.5 border relative overflow-hidden transition-all duration-300 hover:shadow-cyan-500/5 hover:-translate-y-0.5"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(79,195,247,0.08) 0%, rgba(79,195,247,0.02) 100%)',
+                    borderColor: 'rgba(79,195,247,0.15)',
+                  }}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Tổng cảnh báo</span>
+                    <Bell size={13} className="text-cyan-400 opacity-60" />
+                  </div>
+                  <span className="text-3xl font-black text-slate-200 font-num leading-none">{totalAlerts}</span>
                 </div>
-                <div className="rounded-xl p-3 flex flex-col gap-1" style={{ background: 'rgba(79,195,247,0.06)', border: '1px solid rgba(79,195,247,0.12)' }}>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">Đang chờ</span>
-                  <span className="text-2xl font-bold font-num" style={{ color: '#4fc3f7' }}>{waitingAlerts}</span>
+
+                <div
+                  className="rounded-2xl p-4 flex flex-col gap-1.5 border relative overflow-hidden transition-all duration-300 hover:shadow-amber-500/5 hover:-translate-y-0.5"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.02) 100%)',
+                    borderColor: 'rgba(245,158,11,0.15)',
+                  }}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Đang chờ</span>
+                    <Clock size={13} className="text-amber-400 opacity-60" />
+                  </div>
+                  <span className="text-3xl font-black font-num leading-none" style={{ color: '#fbbf24' }}>{waitingAlerts}</span>
                 </div>
-                <div className="rounded-xl p-3 flex flex-col gap-1" style={{ background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.12)' }}>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">Đã kích hoạt</span>
-                  <span className="text-2xl font-bold font-num" style={{ color: '#4ade80' }}>{triggeredAlerts}</span>
+
+                <div
+                  className="rounded-2xl p-4 flex flex-col gap-1.5 border relative overflow-hidden transition-all duration-300 hover:shadow-emerald-500/5 hover:-translate-y-0.5"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)',
+                    borderColor: 'rgba(16,185,129,0.15)',
+                  }}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Đã báo</span>
+                    <CheckCircle size={13} className="text-emerald-400 opacity-60" />
+                  </div>
+                  <span className="text-3xl font-black font-num leading-none" style={{ color: '#34d399' }}>{triggeredAlerts}</span>
                 </div>
               </div>
 
               {/* TAB SELECTOR */}
-              <div className="flex gap-2 p-1 rounded-xl bg-slate-900/60 border border-slate-800/40 w-fit">
+              <div className="flex gap-1.5 p-1 rounded-xl bg-slate-950/70 border border-slate-900 w-fit">
                 <button
                   onClick={() => setActiveTab('alerts')}
                   className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer border-none"
@@ -1053,7 +1188,7 @@ const AlertsPage = () => {
                     {/* Push notification toggle */}
                     <button
                       onClick={requestPermission}
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer border-none transition-all font-medium flex-shrink-0"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer border-none transition-all font-medium flex-shrink-0 hover:brightness-110"
                       style={{
                         background: permission === 'granted' ? 'rgba(74,222,128,0.1)' : 'rgba(79,195,247,0.1)',
                         color: permission === 'granted' ? '#4ade80' : '#4fc3f7',
@@ -1067,7 +1202,7 @@ const AlertsPage = () => {
 
                   {/* BULK ACTIONS TOOLBAR */}
                   {selectedIds.length > 0 && (
-                    <div className="flex items-center justify-between p-3 rounded-xl border border-cyan-500/25 bg-[#0d1b2a]/95 backdrop-blur-md transition-all shadow-lg shadow-black/40">
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-cyan-500/25 bg-[#0d1b2a]/95 backdrop-blur-md transition-all shadow-lg shadow-black/40 animate-slideDown">
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -1112,7 +1247,7 @@ const AlertsPage = () => {
                   ) : alerts.length === 0 ? (
                     <EmptyState icon="🔔" title="Chưa có cảnh báo nào" description="Thiết lập các mốc giá quan trọng để nhận thông báo tức thời khi thị trường biến động." />
                   ) : (
-                    <div className="glass-card overflow-hidden">
+                    <div className="glass-card overflow-hidden transition-all duration-300">
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
@@ -1192,7 +1327,7 @@ const AlertsPage = () => {
                               return (
                                 <tr
                                   key={alert.id}
-                                  className="hover:bg-slate-800/20 transition-all"
+                                  className="hover:bg-slate-800/30 transition-all duration-150"
                                   style={{ background: alert.triggered ? 'rgba(255,255,255,0.01)' : 'transparent' }}
                                 >
                                   {/* Row Checkbox */}
@@ -1210,7 +1345,18 @@ const AlertsPage = () => {
                                       <Sparkline quote={currentQ} />
                                     </div>
                                   </td>
-                                  <td className="py-2.5 px-3 text-slate-300">{getConditionName(alert.condition)}</td>
+                                  <td className="py-2.5 px-3 text-slate-300">
+                                    <span
+                                      className="px-2 py-0.5 rounded text-[10px] font-medium border"
+                                      style={{
+                                        background: getConditionBadgeStyle(alert.condition).bg,
+                                        color: getConditionBadgeStyle(alert.condition).text,
+                                        borderColor: getConditionBadgeStyle(alert.condition).border
+                                      }}
+                                    >
+                                      {getConditionName(alert.condition)}
+                                    </span>
+                                  </td>
                                   <td className="py-2.5 px-3 text-right font-num font-semibold text-slate-300">
                                     {getTargetDisplay(alert)}
                                   </td>
@@ -1258,16 +1404,16 @@ const AlertsPage = () => {
                                   <td className="py-2.5 px-3 text-center">
                                     {alert.triggered ? (
                                       alert.mode === 'continuous' ? (
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.1)', color: '#eab308' }}>
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border border-amber-500/20" style={{ background: 'rgba(234,179,8,0.1)', color: '#eab308' }}>
                                           <Clock size={10} /> Đã báo (Liên tục)
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border border-green-500/20" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
                                           <CheckCircle size={10} /> Đã báo
                                         </span>
                                       )
                                     ) : (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(79,195,247,0.1)', color: '#4fc3f7' }}>
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border border-cyan-500/20" style={{ background: 'rgba(79,195,247,0.1)', color: '#4fc3f7' }}>
                                         <Clock size={10} /> Chờ
                                       </span>
                                     )}
@@ -1294,7 +1440,7 @@ const AlertsPage = () => {
                                       <button
                                         onClick={() => setEditTarget(alert)}
                                         title="Chỉnh sửa cảnh báo"
-                                        className="p-1 hover:bg-cyan-500/10 rounded text-slate-500 hover:text-cyan-400 transition-all cursor-pointer border-none bg-transparent"
+                                        className="p-1 hover:bg-cyan-500/15 rounded text-slate-500 hover:text-cyan-400 transition-all cursor-pointer border-none bg-transparent"
                                       >
                                         <Edit3 size={12} />
                                       </button>
@@ -1303,7 +1449,7 @@ const AlertsPage = () => {
                                         <button
                                           onClick={() => handleReactivateAlert(alert.id)}
                                           title="Kích hoạt lại cảnh báo"
-                                          className="p-1 hover:bg-green-500/10 rounded text-slate-500 hover:text-green-400 transition-all cursor-pointer border-none bg-transparent"
+                                          className="p-1 hover:bg-green-500/15 rounded text-slate-500 hover:text-green-400 transition-all cursor-pointer border-none bg-transparent"
                                         >
                                           <RotateCcw size={12} />
                                         </button>
@@ -1311,7 +1457,7 @@ const AlertsPage = () => {
                                       {/* Nút xóa */}
                                       <button
                                         onClick={() => handleAskDelete(alert)}
-                                        className="p-1 hover:bg-red-500/10 rounded text-slate-500 hover:text-red-400 transition-all cursor-pointer border-none bg-transparent"
+                                        className="p-1 hover:bg-red-500/15 rounded text-slate-500 hover:text-red-400 transition-all cursor-pointer border-none bg-transparent"
                                         title="Xóa cảnh báo"
                                       >
                                         <Trash2 size={12} />
@@ -1380,14 +1526,25 @@ const AlertsPage = () => {
                                 : '—';
 
                               return (
-                                <tr key={log.id} className="hover:bg-slate-800/10 transition-all">
+                                <tr key={log.id} className="hover:bg-slate-800/15 transition-all">
                                   <td className="py-2.5 px-3 font-bold text-slate-200">
                                     <div className="flex items-center gap-2">
                                       <span className="font-num tracking-wide">{log.ticker}</span>
                                       <Sparkline quote={currentPrices[log.ticker]} />
                                     </div>
                                   </td>
-                                  <td className="py-2.5 px-3 text-slate-300">{getConditionName(log.condition)}</td>
+                                  <td className="py-2.5 px-3 text-slate-300">
+                                    <span
+                                      className="px-2 py-0.5 rounded text-[10px] font-medium border"
+                                      style={{
+                                        background: getConditionBadgeStyle(log.condition).bg,
+                                        color: getConditionBadgeStyle(log.condition).text,
+                                        borderColor: getConditionBadgeStyle(log.condition).border
+                                      }}
+                                    >
+                                      {getConditionName(log.condition)}
+                                    </span>
+                                  </td>
                                   <td className="py-2.5 px-3 text-right font-num font-semibold text-slate-300">
                                     {getTargetDisplay(log)}
                                   </td>
@@ -1412,7 +1569,7 @@ const AlertsPage = () => {
               {/* Telegram Info Box */}
               <div
                 className="flex items-start gap-3 p-4 rounded-xl text-xs"
-                style={{ background: 'rgba(79,195,247,0.04)', border: '1px solid rgba(79,195,247,0.08)' }}
+                style={{ background: 'rgba(79,195,247,0.03)', border: '1px solid rgba(79,195,247,0.06)' }}
               >
                 <AlertCircle size={14} className="text-cyan-400 mt-0.5 flex-shrink-0" />
                 <div className="text-slate-400 leading-relaxed space-y-1">
@@ -1427,6 +1584,24 @@ const AlertsPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Embedded keyframe animation styles for fade and slide */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-2px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out forwards;
+        }
+        .animate-slideDown {
+          animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}} />
     </>
   );
 };
