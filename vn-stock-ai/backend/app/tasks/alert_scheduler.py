@@ -1,6 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 import json
+import html
 from pathlib import Path
 
 scheduler = AsyncIOScheduler()
@@ -141,7 +142,6 @@ async def check_alerts():
                         trigger_reason = f"MACD nằm dưới đường Tín hiệu (Histogram: {macd_hist:.4f})"
 
             if hit:
-                import html
                 safe_ticker = html.escape(str(alert['ticker']))
                 safe_reason = html.escape(str(trigger_reason))
                 safe_mode = html.escape(str(alert.get('mode', 'once')))
