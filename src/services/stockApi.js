@@ -58,6 +58,16 @@ export const stockApi = {
     return res.data;
   },
 
+  async updateAlert(id, body) {
+    const res = await api.patch(`/alerts/${id}`, body);
+    return res.data;
+  },
+
+  async testTelegram(telegramChatId) {
+    const res = await api.post('/alerts/test-telegram', { telegram_chat_id: telegramChatId });
+    return res.data;
+  },
+
   async healthCheck() {
     try {
       await api.get('/health', { timeout: 10000 });
