@@ -41,6 +41,7 @@ async def send_signal_digest(chat_id: str, buy_list: list, sell_list: list,
     trigger: 'schedule' (lịch cố định), 'intraday' (phát hiện mới), 'manual' (thủ công)
     """
     from datetime import datetime
+    import html
 
     now_str = scanned_at or datetime.now().strftime("%H:%M %d/%m/%Y")
     trigger_label = {
@@ -55,16 +56,16 @@ async def send_signal_digest(chat_id: str, buy_list: list, sell_list: list,
     if buy_list:
         lines.append("🟢 <b>TÍN HIỆU MUA (BUY)</b>")
         for item in buy_list[:8]:  # Tối đa 8 mã
-            ticker = item.get("ticker", "?")
+            ticker = html.escape(str(item.get("ticker", "?")))
             score = item.get("score", 0)
             price = item.get("price", 0)
             price_str = f"{price/1000:.1f}k" if price >= 1000 else f"{price}"
             rsi = item.get("rsi")
             rsi_str = f"RSI {rsi:.0f}" if rsi else ""
             ai_trend = item.get("ai_trend", "")
-            ai_str = f" · AI: {ai_trend}" if ai_trend else ""
+            ai_str = f" · AI: {html.escape(str(ai_trend))}" if ai_trend else ""
             reasons = item.get("reasons", [])
-            top_reason = reasons[0] if reasons else ""
+            top_reason = html.escape(str(reasons[0])) if reasons else ""
             lines.append(
                 f"  <b>{ticker}</b> · {price_str} · Điểm <b>{score}/10</b>"
                 f"{' · ' + rsi_str if rsi_str else ''}{ai_str}"
@@ -78,14 +79,14 @@ async def send_signal_digest(chat_id: str, buy_list: list, sell_list: list,
     if sell_list:
         lines.append("🔴 <b>CẢNH BÁO BÁN (SELL)</b>")
         for item in sell_list[:5]:  # Tối đa 5 mã
-            ticker = item.get("ticker", "?")
+            ticker = html.escape(str(item.get("ticker", "?")))
             score = item.get("score", 0)
             price = item.get("price", 0)
             price_str = f"{price/1000:.1f}k" if price >= 1000 else f"{price}"
             rsi = item.get("rsi")
             rsi_str = f"RSI {rsi:.0f}" if rsi else ""
             reasons = item.get("reasons", [])
-            top_reason = reasons[0] if reasons else ""
+            top_reason = html.escape(str(reasons[0])) if reasons else ""
             lines.append(
                 f"  <b>{ticker}</b> · {price_str} · Điểm <b>{score}/10</b>"
                 f"{' · ' + rsi_str if rsi_str else ''}"
@@ -99,4 +100,3 @@ async def send_signal_digest(chat_id: str, buy_list: list, sell_list: list,
 
     message = "\n".join(lines)
     return await send_alert(chat_id, message)
-
