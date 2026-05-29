@@ -242,7 +242,9 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
             style={{ backgroundColor: trend_color }}
           />
           <div className="relative z-10">
-            <div className="text-[10px] text-slate-500 uppercase font-black tracking-wider mb-1">Dự báo Prophet AI · {periods} phiên tới</div>
+            <div className="text-[10px] text-slate-500 uppercase font-black tracking-wider mb-1">
+            {predData.model || 'Ensemble AI'} · {periods} phiên tới
+          </div>
             <div className="flex items-center gap-2.5">
               <span className="text-2xl font-black tracking-wide" style={{ color: trend_color }}>{trend_label}</span>
               <span
@@ -383,7 +385,7 @@ const PredictionTab = ({ ticker, ohlcvData, sentimentData }) => {
         </div>
 
         <p className="text-[10px] text-slate-500 text-center font-medium">
-          🤖 Model: Prophet (Meta) · Tích hợp chỉ báo tâm lý tin tức từ CafeF · Không phải khuyến nghị đầu tư
+          🤖 Model: Ensemble AI (Prophet + XGBoost) · Tích hợp chỉ báo kỹ thuật RSI, MACD, BB · Không phải khuyến nghị đầu tư
         </p>
       </div>
     );

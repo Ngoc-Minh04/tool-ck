@@ -12,13 +12,14 @@ router = APIRouter()
 
 @router.get("/predict")
 async def predict(ticker: str = Query(...), periods: int = 10, sentiment_score: float = Query(None)):
-    """Dự đoán giá N phiên tiếp theo dùng mô hình Prophet (không tốn request thêm)."""
-    key = f"predict:{ticker.upper()}:{periods}:{sentiment_score}"
+    """Dự đoán giá N phiên tiếp theo dùng Ensemble Model (Prophet + XGBoost)."""
+    # v2: dùng 2 năm dữ liệu để Ensemble Model học chính xác hơn
+    key = f"predict_v2:{ticker.upper()}:{periods}:{sentiment_score}"
     cached = await cache_get(key)
     if cached:
         return cached
     from fastapi.concurrency import run_in_threadpool
-    ohlcv_data = await run_in_threadpool(get_ohlcv, ticker, "1y", "1D")
+    ohlcv_data = await run_in_threadpool(get_ohlcv, ticker, "2y", "1D")
     result = await run_in_threadpool(predict_price_prophet, ohlcv_data, periods, sentiment_score)
     result["ticker"] = ticker.upper()
     await cache_set(key, result, ttl=3600)  # Cache 1 giờ
