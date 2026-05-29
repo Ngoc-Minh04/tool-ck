@@ -46,6 +46,10 @@ def _get_claude_headers(key: str) -> dict:
 
 
 async def _call_gemini(key: str, body: dict, stream: bool):
+    keys = [k.strip() for k in key.split(",") if k.strip()]
+    if not keys:
+        keys = [key]
+
     body_model = body.get("model", "")
     if "gemini-" in body_model:
         gemini_model = body_model
@@ -99,9 +103,10 @@ async def _call_gemini(key: str, body: dict, stream: bool):
 
     if stream:
         async def event_stream():
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:streamGenerateContent?alt=sse&key={key}"
             async with httpx.AsyncClient(timeout=120) as client:
                 for attempt in range(3):
+                    curr_key = keys[attempt % len(keys)]
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:streamGenerateContent?alt=sse&key={curr_key}"
                     try:
                         async with client.stream("POST", url, json=gemini_body) as r:
                             if r.status_code == 503:
@@ -113,12 +118,26 @@ async def _call_gemini(key: str, body: dict, stream: bool):
                                 logger.warning(f"[Stream Attempt {attempt+1}] Gemini 503 overload. Retrying in {attempt+1}s...")
                                 await asyncio.sleep(attempt + 1)
                                 continue
+
+                            if r.status_code == 429:
+                                if attempt == 2:
+                                    logger.error(f"[Stream] Gemini 429 rate limit exceeded. Failed after 3 attempts.")
+                                    yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': 'Giới hạn lượt gọi API Gemini đã hết (429). Vui lòng thử lại sau vài giây.'}})}\n\n".encode("utf-8")
+                                    yield b"data: [DONE]\n\n"
+                                    return
+                                next_key = keys[(attempt + 1) % len(keys)]
+                                sleep_time = 1 if next_key != curr_key else 6
+                                logger.warning(f"[Stream Attempt {attempt+1}] Gemini 429 rate limit. Retrying in {sleep_time}s...")
+                                await asyncio.sleep(sleep_time)
+                                continue
+
                             if r.status_code != 200:
                                 err_content = await r.aread()
                                 logger.error(f"Gemini API returned status {r.status_code}: {err_content.decode('utf-8', errors='ignore')}")
                                 yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': f'Lỗi kết nối Gemini API ({r.status_code}).'}})}\n\n".encode("utf-8")
                                 yield b"data: [DONE]\n\n"
                                 return
+
                             buffer = ""
                             async for chunk in r.aiter_text():
                                 buffer += chunk
@@ -145,9 +164,10 @@ async def _call_gemini(key: str, body: dict, stream: bool):
             yield b"data: [DONE]\n\n"
         return StreamingResponse(event_stream(), media_type="text/event-stream")
     else:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={key}"
         async with httpx.AsyncClient(timeout=60) as client:
             for attempt in range(3):
+                curr_key = keys[attempt % len(keys)]
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={curr_key}"
                 try:
                     r = await client.post(url, json=gemini_body)
                     res_json = r.json()
@@ -162,6 +182,21 @@ async def _call_gemini(key: str, body: dict, stream: bool):
                         logger.warning(f"[Attempt {attempt+1}] Gemini 503 overload. Retrying in {attempt+1}s...")
                         await asyncio.sleep(attempt + 1)
                         continue
+
+                    if r.status_code == 429:
+                        if attempt == 2:
+                            logger.error(f"Gemini 429 rate limit exceeded. Failed after 3 attempts.")
+                            from fastapi.responses import JSONResponse
+                            return JSONResponse(
+                                status_code=429,
+                                content={"error": {"message": "Giới hạn lượt gọi API Gemini đã hết (429). Vui lòng thử lại sau vài giây."}}
+                            )
+                        next_key = keys[(attempt + 1) % len(keys)]
+                        sleep_time = 1 if next_key != curr_key else 6
+                        logger.warning(f"[Attempt {attempt+1}] Gemini 429 rate limit. Retrying in {sleep_time}s...")
+                        await asyncio.sleep(sleep_time)
+                        continue
+
                     if r.status_code != 200:
                         logger.error(f"Gemini API returned status {r.status_code}: {res_json}")
                         from fastapi.responses import JSONResponse
@@ -308,6 +343,30 @@ def _format_claude_messages(body: dict) -> list:
     return claude_messages
 
 
+def _get_smart_cache_ttl() -> int:
+    """
+    Tính toán thời gian cache thông minh dựa trên thời gian giao dịch của VN:
+    - Trong giờ giao dịch (Thứ 2 - Thứ 6, từ 9h00 đến 15h00): Cache 4 giờ (14400s)
+    - Ngoài giờ giao dịch & Cuối tuần: Cache 24 giờ (86400s)
+    """
+    import datetime
+    now = datetime.datetime.now()
+    day = now.weekday()  # 0=T2, ..., 4=T6, 5=T7, 6=CN
+    
+    # Kiểm tra cuối tuần (Thứ Bảy, Chủ Nhật)
+    if day >= 5:
+        return 86400  # 24 giờ
+        
+    # Kiểm tra giờ giao dịch (9h00 đến 15h00)
+    time_in_minutes = now.hour * 60 + now.minute
+    is_trading_hours = 540 <= time_in_minutes <= 900
+    
+    if is_trading_hours:
+        return 14400  # 4 giờ
+        
+    return 86400  # 24 giờ
+
+
 @router.post("/analyze")
 async def analyze(request: Request):
     """Proxy endpoint cho AI analysis — tự động nhận diện và định tuyến tới Claude, Gemini hoặc ChatGPT."""
@@ -316,10 +375,25 @@ async def analyze(request: Request):
     key, provider = _get_key_and_provider(client_key)
     stream = body.get("stream", False)
 
+    # 1. Kiểm tra cache cho các yêu cầu không stream để tiết kiệm lượt gọi AI
+    cache_key = None
+    if not stream:
+        import hashlib
+        from app.services.cache_service import cache_get, cache_set
+        hash_input = f"{body.get('system', '')}:{json.dumps(body.get('messages', []))}"
+        cache_hash = hashlib.md5(hash_input.encode("utf-8")).hexdigest()
+        cache_key = f"ai_analysis:{cache_hash}"
+        cached_result = await cache_get(cache_key)
+        if cached_result:
+            logger.info("AI Analysis Cache HIT! Trả về kết quả phân tích cũ từ cache.")
+            return cached_result
+
+    # 2. Xử lý gọi API thực tế
+    res_data = None
     if provider == "gemini":
-        return await _call_gemini(key, body, stream)
+        res_data = await _call_gemini(key, body, stream)
     elif provider == "openai":
-        return await _call_openai(key, body, stream)
+        res_data = await _call_openai(key, body, stream)
     else:
         headers = _get_claude_headers(key)
         
@@ -353,7 +427,19 @@ async def analyze(request: Request):
                         return JSONResponse(status_code=r.status_code, content=err_json)
                     except Exception:
                         return JSONResponse(status_code=r.status_code, content={"error": {"message": r.text}})
-                return r.json()
+                res_data = r.json()
+
+    # 3. Lưu vào cache nếu cuộc gọi thành công và không phải stream
+    if cache_key and res_data and isinstance(res_data, dict) and "error" not in res_data:
+        from app.services.cache_service import cache_set
+        # Cache thông minh
+        ttl = _get_smart_cache_ttl()
+        await cache_set(cache_key, res_data, ttl=ttl)
+        logger.info(f"AI Analysis Cached. TTL: {ttl} seconds.")
+
+    return res_data
+
+
 
 
 @router.post("/chat")
