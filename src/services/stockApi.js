@@ -144,6 +144,16 @@ export const stockApi = {
     return res.data;
   },
 
+  async getSignals() {
+    const res = await api.get('/scanner/signals');
+    return res.data?.data || res.data || {};
+  },
+
+  async sendSignalsTelegram() {
+    const res = await api.post('/scanner/signals/send');
+    return res.data;
+  },
+
   async getPredict(ticker, periods = 10, sentimentScore = null) {
     let url = `/stock/predict?ticker=${ticker.toUpperCase()}&periods=${periods}`;
     if (sentimentScore !== null && sentimentScore !== undefined) {

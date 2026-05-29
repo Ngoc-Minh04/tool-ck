@@ -189,8 +189,161 @@ async def check_alerts():
         except Exception as e:
             logger.error(f"Alert check error for {alert.get('ticker')}: {e}")
 
+
+# ===== SIGNAL SCANNER JOBS =====
+
+# Cache RAM anti-spam: lưu {ticker: {"buy": timestamp, "sell": timestamp}}
+_signal_sent_cache: dict = {}
+# Lưu tập hợp tín hiệu lần quét trước (để so sánh phát hiện tín hiệu mới)
+_last_signal_set: dict = {"buy": set(), "sell": set()}
+# Lưu kết quả tín hiệu mới nhất để API frontend lấy
+_latest_signals: dict = {"buy_signals": [], "sell_signals": [], "scanned_at": None, "total_scanned": 0}
+
+
+def _get_default_chat_id() -> str:
+    """Lấy telegram_chat_id đầu tiên có trong database."""
+    try:
+        from app.services.database import get_all_alerts
+        alerts = get_all_alerts()
+        for a in alerts:
+            cid = a.get("telegram_chat_id", "").strip()
+            if cid:
+                return cid
+    except Exception as e:
+        logger.warning(f"[Signal] Không lấy được Chat ID: {e}")
+    return ""
+
+
+def _is_anti_spam(ticker: str, signal_type: str) -> bool:
+    """Kiểm tra xem tín hiệu này đã gửi trong vòng 24 giờ chưa."""
+    import time
+    entry = _signal_sent_cache.get(ticker, {})
+    last_ts = entry.get(signal_type, 0)
+    return (time.time() - last_ts) < 86400  # 24 giờ
+
+
+def _mark_sent(ticker: str, signal_type: str):
+    import time
+    if ticker not in _signal_sent_cache:
+        _signal_sent_cache[ticker] = {}
+    _signal_sent_cache[ticker][signal_type] = time.time()
+
+
+async def _run_signal_scan_and_notify(trigger: str = "schedule"):
+    """
+    Lõi chính: Quét tín hiệu, lọc anti-spam, cập nhật _latest_signals, gửi Telegram.
+    trigger: 'schedule' | 'intraday' | 'manual'
+    """
+    global _latest_signals, _last_signal_set
+
+    try:
+        from fastapi.concurrency import run_in_threadpool
+        from app.services.scanner_service import scan_all_stocks, get_signal_candidates
+        from app.services.telegram_service import send_signal_digest
+
+        logger.info(f"[Signal] Bắt đầu quét tín hiệu (trigger={trigger})...")
+        scan_results = await run_in_threadpool(scan_all_stocks, trigger == "schedule")
+        candidates = get_signal_candidates(scan_results)
+
+        buy_list = candidates.get("buy_signals", [])
+        sell_list = candidates.get("sell_signals", [])
+        scanned_at = candidates.get("scanned_at")
+        total_scanned = candidates.get("total_scanned", 0)
+
+        # Cập nhật latest_signals cho API frontend
+        _latest_signals = {
+            "buy_signals": buy_list,
+            "sell_signals": sell_list,
+            "scanned_at": scanned_at,
+            "total_buy": len(buy_list),
+            "total_sell": len(sell_list),
+            "total_scanned": total_scanned,
+        }
+
+        # Với intraday: chỉ gửi Telegram nếu có mã MỚI chưa thấy lần trước
+        if trigger == "intraday":
+            current_buy_set = {r["ticker"] for r in buy_list}
+            current_sell_set = {r["ticker"] for r in sell_list}
+            new_buys = current_buy_set - _last_signal_set["buy"]
+            new_sells = current_sell_set - _last_signal_set["sell"]
+            _last_signal_set = {"buy": current_buy_set, "sell": current_sell_set}
+
+            if not new_buys and not new_sells:
+                logger.debug("[Signal] Intraday: Không có tín hiệu mới, bỏ qua gửi Telegram.")
+                return
+
+            # Chỉ gửi các mã mới
+            buy_to_send = [r for r in buy_list if r["ticker"] in new_buys and not _is_anti_spam(r["ticker"], "buy")]
+            sell_to_send = [r for r in sell_list if r["ticker"] in new_sells and not _is_anti_spam(r["ticker"], "sell")]
+        else:
+            # Với schedule: lọc anti-spam và gửi tất cả
+            buy_to_send = [r for r in buy_list if not _is_anti_spam(r["ticker"], "buy")]
+            sell_to_send = [r for r in sell_list if not _is_anti_spam(r["ticker"], "sell")]
+
+        if not buy_to_send and not sell_to_send and trigger == "intraday":
+            logger.debug("[Signal] Tất cả tín hiệu mới đều đã gửi trong 24h, bỏ qua.")
+            return
+
+        chat_id = _get_default_chat_id()
+        if not chat_id:
+            logger.warning("[Signal] Không có Chat ID Telegram, bỏ qua gửi.")
+            return
+
+        success = await send_signal_digest(
+            chat_id=chat_id,
+            buy_list=buy_to_send,
+            sell_list=sell_to_send,
+            scanned_at=scanned_at,
+            total_scanned=total_scanned,
+            trigger=trigger,
+        )
+
+        if success:
+            for r in buy_to_send:
+                _mark_sent(r["ticker"], "buy")
+            for r in sell_to_send:
+                _mark_sent(r["ticker"], "sell")
+            logger.info(f"[Signal] Đã gửi Telegram: {len(buy_to_send)} BUY, {len(sell_to_send)} SELL.")
+
+    except Exception as e:
+        logger.error(f"[Signal] Lỗi quét/gửi tín hiệu: {e}")
+
+
+async def send_daily_signal_digest():
+    """Job theo lịch cố định (09:30 và 14:30) — luôn gửi báo cáo tổng hợp."""
+    await _run_signal_scan_and_notify(trigger="schedule")
+
+
+async def send_intraday_signal_alert():
+    """Job quét liên tục mỗi 15 phút — chỉ gửi khi có tín hiệu MỚI."""
+    from app.services.vnstock_service import is_market_active
+    if not is_market_active():
+        logger.debug("[Signal] Ngoài giờ giao dịch, bỏ qua intraday scan.")
+        return
+    await _run_signal_scan_and_notify(trigger="intraday")
+
+
+def get_latest_signals() -> dict:
+    """Trả về kết quả tín hiệu mới nhất (cho API endpoint)."""
+    return _latest_signals
+
+
 def start_scheduler():
     scheduler.add_job(check_alerts, "interval", seconds=15, id="alert_checker",
                       replace_existing=True)
+
+    # Job báo cáo tổng hợp lúc 09:30 và 14:30 các ngày giao dịch (T2-T6)
+    scheduler.add_job(send_daily_signal_digest, "cron",
+                      hour=9, minute=30, day_of_week="mon-fri",
+                      id="signal_digest_morning", replace_existing=True)
+    scheduler.add_job(send_daily_signal_digest, "cron",
+                      hour=14, minute=30, day_of_week="mon-fri",
+                      id="signal_digest_afternoon", replace_existing=True)
+
+    # Job quét liên tục mỗi 15 phút
+    scheduler.add_job(send_intraday_signal_alert, "interval", minutes=15,
+                      id="signal_intraday", replace_existing=True)
+
     scheduler.start()
-    logger.info("Alert scheduler started")
+    logger.info("Alert scheduler started (alerts: 15s, signal digest: 09:30+14:30, intraday: 15min)")
+

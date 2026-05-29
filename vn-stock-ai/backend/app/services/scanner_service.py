@@ -391,3 +391,34 @@ def preload_ohlcv():
     t = threading.Thread(target=_load, daemon=True)
     t.start()
     logger.info("[Scanner] Đã kích hoạt preload OHLCV nền.")
+
+
+def get_signal_candidates(scan_results: dict = None) -> dict:
+    """
+    Lọc ra danh sách tín hiệu BUY (>=7/10) và SELL (<=3/10) từ kết quả quét.
+    Nếu không truyền scan_results, tự động gọi scan_all_stocks().
+    """
+    if scan_results is None:
+        scan_results = scan_all_stocks()
+
+    if not scan_results or "all_results" not in scan_results:
+        return {"buy_signals": [], "sell_signals": [], "scanned_at": None}
+
+    all_results = scan_results.get("all_results", [])
+
+    buy_signals = [r for r in all_results if r.get("score", 0) >= 7]
+    sell_signals = [r for r in all_results if r.get("score", 0) <= 3]
+
+    # Sắp xếp: BUY theo điểm cao nhất trước, SELL theo điểm thấp nhất trước
+    buy_signals.sort(key=lambda x: -x.get("score", 0))
+    sell_signals.sort(key=lambda x: x.get("score", 0))
+
+    return {
+        "buy_signals": buy_signals,
+        "sell_signals": sell_signals,
+        "total_buy": len(buy_signals),
+        "total_sell": len(sell_signals),
+        "scanned_at": scan_results.get("scanned_at"),
+        "total_scanned": scan_results.get("total_scanned", 0),
+    }
+
