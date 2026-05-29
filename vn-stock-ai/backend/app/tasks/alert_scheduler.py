@@ -141,23 +141,30 @@ async def check_alerts():
                         trigger_reason = f"MACD nằm dưới đường Tín hiệu (Histogram: {macd_hist:.4f})"
 
             if hit:
+                import html
+                safe_ticker = html.escape(str(alert['ticker']))
+                safe_reason = html.escape(str(trigger_reason))
+                safe_mode = html.escape(str(alert.get('mode', 'once')))
+                safe_note = html.escape(str(alert.get('note', '') or '—'))
+
                 # Format message specifically for volume if needed
                 if condition == "volume_above":
+                    current_vol = ohlcv[-1].get("volume", 0)
                     msg = (
-                        f"<b>ALERT (Khối lượng)</b>: {alert['ticker']}\n"
-                        f"Khối lượng hiện tại: <b>{ohlcv[-1].get('volume', 0):,.0f}</b> CP\n"
-                        f"Điều kiện: <b>{trigger_reason}</b>\n"
+                        f"<b>ALERT (Khối lượng)</b>: {safe_ticker}\n"
+                        f"Khối lượng hiện tại: <b>{current_vol:,.0f}</b> CP\n"
+                        f"Điều kiện: <b>{safe_reason}</b>\n"
                         f"Giá hiện tại: <b>{current:,.0f}</b> VND\n"
-                        f"Chế độ: {alert.get('mode', 'once')}\n"
-                        f"Ghi chú: {alert.get('note', '') or '—'}"
+                        f"Chế độ: {safe_mode}\n"
+                        f"Ghi chú: {safe_note}"
                     )
                 else:
                     msg = (
-                        f"<b>ALERT</b>: {alert['ticker']}\n"
+                        f"<b>ALERT</b>: {safe_ticker}\n"
                         f"Gia hien tai: <b>{current:,.0f}</b> VND\n"
-                        f"Dieu kien: <b>{trigger_reason}</b>\n"
-                        f"Che do: {alert.get('mode', 'once')}\n"
-                        f"Ghi chu: {alert.get('note', '') or '—'}"
+                        f"Dieu kien: <b>{safe_reason}</b>\n"
+                        f"Che do: {safe_mode}\n"
+                        f"Ghi chu: {safe_note}"
                     )
                 await send_alert(alert.get("telegram_chat_id", ""), msg)
                 alert["triggered"] = True
