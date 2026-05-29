@@ -190,7 +190,7 @@ async def check_alerts():
             logger.error(f"Alert check error for {alert.get('ticker')}: {e}")
 
 def start_scheduler():
-    scheduler.add_job(check_alerts, "interval", minutes=1, id="alert_checker",
+    scheduler.add_job(check_alerts, "interval", seconds=15, id="alert_checker",
                       replace_existing=True)
     scheduler.start()
     logger.info("Alert scheduler started")

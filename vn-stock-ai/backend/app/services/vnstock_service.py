@@ -95,7 +95,18 @@ def Vnstock():
 
 
 
+_ohlcv_cache = {}
+OHLCV_CACHE_TTL = 30  # 30 seconds
+
 def get_ohlcv(ticker: str, period: str = "3mo", interval: str = "1D") -> list:
+    import time
+    key = (ticker.upper(), period, interval)
+    now = time.time()
+    if key in _ohlcv_cache:
+        data, ts = _ohlcv_cache[key]
+        if now - ts < OHLCV_CACHE_TTL:
+            return data
+
     period_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "3y": 1095}
     try:
         from vnstock.api.quote import Quote
@@ -113,10 +124,13 @@ def get_ohlcv(ticker: str, period: str = "3mo", interval: str = "1D") -> list:
             for col in ("open", "high", "low", "close"):
                 if r.get(col) is not None:
                     r[col] = float(r[col]) * 1000
+        _ohlcv_cache[key] = (records, now)
         return records
     except BaseException as e:
         logger.error(f"get_ohlcv error {ticker}: {e}")
-        return _mock_ohlcv(ticker, period_map.get(period, 90))
+        mock_data = _mock_ohlcv(ticker, period_map.get(period, 90))
+        _ohlcv_cache[key] = (mock_data, now)
+        return mock_data
 
 
 def get_stock_info(ticker: str) -> dict:
