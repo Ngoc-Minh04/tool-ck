@@ -28,6 +28,7 @@ const useClaude = () => {
           maxTokens: 4096,
           googleSearch: settings.googleSearch,
           bypassCache,
+        });
 
         if (onSuccess) onSuccess(result);
         return result;
