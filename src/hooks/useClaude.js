@@ -15,7 +15,7 @@ const useClaude = () => {
    * Gọi Claude để phân tích một prompt đơn lẻ
    */
   const analyze = useCallback(
-    async ({ systemPrompt, userPrompt, onSuccess, onError }) => {
+    async ({ systemPrompt, userPrompt, bypassCache = false, onSuccess, onError }) => {
       setLoading(true);
       setError(null);
 
@@ -27,7 +27,7 @@ const useClaude = () => {
           messages: [{ role: 'user', content: userPrompt }],
           maxTokens: 4096,
           googleSearch: settings.googleSearch,
-        });
+          bypassCache,
 
         if (onSuccess) onSuccess(result);
         return result;

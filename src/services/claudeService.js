@@ -166,6 +166,7 @@ export const callClaude = async ({
   maxTokens = 4096,
   onStream = null,
   googleSearch = false,
+  bypassCache = false,
 }) => {
   // Lấy key từ .env làm dự phòng nếu key truyền vào từ settings trống hoặc là placeholder
   let activeKey = apiKey;
@@ -202,6 +203,7 @@ export const callClaude = async ({
     messages,
     stream: !!onStream,
     google_search: googleSearch,
+    bypass_cache: bypassCache,
   };
 
   const headers = {

@@ -64,6 +64,15 @@ def compute_indicators(ohlcv: List[dict]) -> dict:
         stoch_k = last(stoch["STOCHk_14_3_3"]) if stoch is not None and "STOCHk_14_3_3" in stoch.columns else None
         stoch_d = last(stoch["STOCHd_14_3_3"]) if stoch is not None and "STOCHd_14_3_3" in stoch.columns else None
 
+        # Tính volume hôm nay và volume ratio (so với TB20)
+        vol_today = float(df["volume"].iloc[-1]) if not df.empty else None
+        vol_avg20_last = last(vol_avg20)
+        vol_ratio = round(vol_today / vol_avg20_last, 2) if (vol_today and vol_avg20_last and vol_avg20_last > 0) else None
+
+        # Tính ATR-based stop-loss (ATR x 1.5)
+        atr_val = last(atr)
+        atr_stop = round(atr_val * 1.5, 2) if atr_val else None
+
         return {
             "rsi": last(rsi),
             "macd": macd_line,
@@ -75,12 +84,15 @@ def compute_indicators(ohlcv: List[dict]) -> dict:
             "ma20": ma20_last,
             "ma50": ma50_last,
             "ma200": ma200_last,
-            "atr": last(atr),
+            "atr": atr_val,
+            "atr_stop": atr_stop,
             "obv": last(obv),
             "stoch_k": stoch_k,
             "stoch_d": stoch_d,
             "trend": trend,
-            "volume_avg20": last(vol_avg20),
+            "volume_avg20": vol_avg20_last,
+            "volume_today": vol_today,
+            "volume_ratio": vol_ratio,
             "close": close_last,
         }
     except Exception as e:

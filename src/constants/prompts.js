@@ -4,7 +4,7 @@ export const STOCK_ANALYST_SYSTEM_PROMPT = `Bạn là chuyên gia phân tích ch
 
 ## PHƯƠNG PHÁP PHÂN TÍCH
 Sử dụng kết hợp phân tích kỹ thuật và cơ bản:
-- **Kỹ thuật**: RSI, MACD, Bollinger Bands, MA20/50/200, Ichimoku Cloud, Volume Profile, Fibonacci Retracement, Support/Resistance
+- **Kỹ thuật**: RSI, MACD, Bollinger Bands, MA20/50/200, Stochastic, Volume Profile, ATR, Support/Resistance
 - **Cơ bản**: P/E, P/B, EPS, ROE, ROA, Dòng tiền ĐTNN (khối ngoại), Margin Debt, Room ngoại
 - **Dòng tiền**: Phân tích khối lượng giao dịch, dòng tiền thông minh (Smart Money)
 
@@ -26,10 +26,11 @@ Mô tả ngắn về doanh nghiệp, vị thế ngành, điểm mạnh/yếu
 ### 📈 PHÂN TÍCH KỸ THUẬT
 - Xu hướng hiện tại (uptrend/downtrend/sideway)
 - RSI: [giá trị] → [nhận xét]
+- Stochastic K/D: [giá trị] → [nhận xét]
 - MACD: [nhận xét tín hiệu]
 - MA20/50/200: [nhận xét]
 - Bollinger Bands: [nhận xét]
-- Volume: [nhận xét khối lượng]
+- Volume: [nhận xét khối lượng so TB20]
 
 ### 🏢 PHÂN TÍCH CƠ BẢN (nếu có dữ liệu)
 - P/E, P/B hiện tại vs ngành
@@ -62,38 +63,112 @@ export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, info
 
   const activeSources = sources.filter(s => s.enabled).map(s => s.name).join(', ');
 
+  // Nhãn RSI
+  const rsiLabel = (v) => {
+    if (!v) return 'N/A';
+    if (v >= 70) return `${v.toFixed(1)} → Quá mua 🔴`;
+    if (v <= 30) return `${v.toFixed(1)} → Quá bán 🟢`;
+    if (v >= 60) return `${v.toFixed(1)} → Mạnh, tiệm cận quá mua`;
+    if (v <= 40) return `${v.toFixed(1)} → Yếu, tiệm cận quá bán`;
+    return `${v.toFixed(1)} → Trung lập`;
+  };
+
+  // Nhãn Stochastic
+  const stochLabel = (k, d) => {
+    if (!k || !d) return 'N/A';
+    if (k >= 80) return `${k.toFixed(1)}/${d.toFixed(1)} → Quá mua 🔴`;
+    if (k <= 20) return `${k.toFixed(1)}/${d.toFixed(1)} → Quá bán 🟢`;
+    if (k > d) return `${k.toFixed(1)}/${d.toFixed(1)} → K cắt trên D, đà tăng ✅`;
+    return `${k.toFixed(1)}/${d.toFixed(1)} → K dưới D, đà yếu ⚠️`;
+  };
+
+  // Nhãn Volume Ratio
+  const volLabel = (ratio) => {
+    if (!ratio) return 'N/A';
+    if (ratio >= 2.0) return `${ratio.toFixed(2)}x TB20 → Bùng nổ khối lượng 🔥`;
+    if (ratio >= 1.5) return `${ratio.toFixed(2)}x TB20 → Khối lượng mạnh ✅`;
+    if (ratio >= 1.0) return `${ratio.toFixed(2)}x TB20 → Bình thường`;
+    return `${ratio.toFixed(2)}x TB20 → Khối lượng yếu ⚠️`;
+  };
+
+  // Nhãn MACD Histogram
+  const macdHistLabel = (hist) => {
+    if (!hist) return 'N/A';
+    if (hist > 0) return `+${hist.toFixed(2)} → Đà tăng ✅`;
+    return `${hist.toFixed(2)} → Đà giảm ⚠️`;
+  };
+
   let liveDataPrompt = '';
   if (info && technicals) {
     liveDataPrompt = `
-DỮ LIỆU THỰC TẾ HIỆN TẠI CỦA CỔ PHIẾU (Bắt buộc phải sử dụng số liệu này):
-- **Giá hiện tại**: ${info.currentPrice?.toLocaleString('vi-VN')} VND
-- **Thay đổi hôm nay**: ${info.change >= 0 ? '+' : ''}${(info.change * 100).toFixed(2)}%
-- **Khối lượng**: ${(info.volume / 1e6).toFixed(1)}M cổ phiếu
-- **Chỉ số cơ bản**:
-  - P/E: ${info.fundamentals?.pe ?? 'N/A'}x
-  - P/B: ${info.fundamentals?.pb ?? 'N/A'}x
-  - ROE: ${info.fundamentals?.roe ?? 'N/A'}%
-  - ROA: ${info.fundamentals?.roa ?? 'N/A'}%
-  - EPS: ${info.fundamentals?.eps?.toLocaleString('vi-VN') ?? 'N/A'} VND
-  - Vốn hóa: ${info.fundamentals?.marketCap ? (info.fundamentals.marketCap / 1e12).toFixed(1) + 'T' : 'N/A'}
-- **Chỉ báo kỹ thuật**:
-  - RSI (14): ${technicals.rsi ? technicals.rsi.toFixed(1) : 'N/A'}
-  - MA20: ${technicals.ma20 ? Math.round(technicals.ma20).toLocaleString('vi-VN') : 'N/A'} VND
-  - MA50: ${technicals.ma50 ? Math.round(technicals.ma50).toLocaleString('vi-VN') : 'N/A'} VND
-  - MA200: ${technicals.ma200 ? Math.round(technicals.ma200).toLocaleString('vi-VN') : 'N/A'} VND
-  - Xu hướng MA: ${technicals.trend === 'uptrend' ? 'Tăng giá (Uptrend)' : technicals.trend === 'downtrend' ? 'Giảm giá (Downtrend)' : 'Đi ngang (Sideways)'}
-  - Bollinger Bands: Dải trên ${technicals.bb_upper ? Math.round(technicals.bb_upper).toLocaleString('vi-VN') : 'N/A'} VND, Dải dưới ${technicals.bb_lower ? Math.round(technicals.bb_lower).toLocaleString('vi-VN') : 'N/A'} VND, Trung tâm ${technicals.bb_mid ? Math.round(technicals.bb_mid).toLocaleString('vi-VN') : 'N/A'} VND
-  - MACD: ${technicals.macd ? technicals.macd.toFixed(2) : 'N/A'} (Signal: ${technicals.macd_signal ? technicals.macd_signal.toFixed(2) : 'N/A'}, Histogram: ${technicals.macd_hist ? technicals.macd_hist.toFixed(2) : 'N/A'})
+DU LIEU THUC TE HIEN TAI (Bat buoc su dung chinh xac cac so lieu nay - TUYET DOI KHONG tu bia so):
+
+GIA & KHOI LUONG:
+- Gia hien tai: ${info.currentPrice?.toLocaleString('vi-VN')} VND | Thay doi hom nay: ${info.change >= 0 ? '+' : ''}${(info.change * 100).toFixed(2)}%
+- Volume hom nay: ${technicals.volume_today ? (technicals.volume_today / 1e6).toFixed(1) + 'M' : 'N/A'} co phieu | ${volLabel(technicals.volume_ratio)}
+
+CHI BAO KY THUAT:
+- Xu huong MA: ${technicals.trend === 'uptrend' ? 'UPTREND (Close > MA20 > MA50)' : technicals.trend === 'downtrend' ? 'DOWNTREND (Close < MA20 < MA50)' : 'SIDEWAYS'}
+- MA20: ${technicals.ma20 ? Math.round(technicals.ma20).toLocaleString('vi-VN') : 'N/A'} | MA50: ${technicals.ma50 ? Math.round(technicals.ma50).toLocaleString('vi-VN') : 'N/A'} | MA200: ${technicals.ma200 ? Math.round(technicals.ma200).toLocaleString('vi-VN') : 'N/A'} VND
+- RSI(14): ${rsiLabel(technicals.rsi)}
+- Stochastic K/D: ${stochLabel(technicals.stoch_k, technicals.stoch_d)}
+- MACD: ${technicals.macd ? technicals.macd.toFixed(2) : 'N/A'} | Signal: ${technicals.macd_signal ? technicals.macd_signal.toFixed(2) : 'N/A'} | Histogram: ${macdHistLabel(technicals.macd_hist)}
+- Bollinger Bands: Tren ${technicals.bb_upper ? Math.round(technicals.bb_upper).toLocaleString('vi-VN') : 'N/A'} | Giua ${technicals.bb_mid ? Math.round(technicals.bb_mid).toLocaleString('vi-VN') : 'N/A'} | Duoi ${technicals.bb_lower ? Math.round(technicals.bb_lower).toLocaleString('vi-VN') : 'N/A'} VND
+- ATR(14): ${technicals.atr ? technicals.atr.toFixed(2) : 'N/A'} VND | Stop-loss ATRx1.5: ${technicals.atr_stop ? technicals.atr_stop.toFixed(2) : 'N/A'} VND
+
+CO BAN:
+- P/E: ${info.fundamentals?.pe ?? 'N/A'}x | P/B: ${info.fundamentals?.pb ?? 'N/A'}x
+- ROE: ${info.fundamentals?.roe ?? 'N/A'}% | ROA: ${info.fundamentals?.roa ?? 'N/A'}%
+- EPS: ${info.fundamentals?.eps?.toLocaleString('vi-VN') ?? 'N/A'} VND | Von hoa: ${info.fundamentals?.marketCap ? (info.fundamentals.marketCap / 1e12).toFixed(1) + 'T VND' : 'N/A'}
 `;
   }
 
-  return `Phân tích toàn diện cổ phiếu **${ticker}** trên sàn **${exchange}** cho khung thời gian **${timeframeMap[timeframe] || timeframe}**.
+  const tfLabel = timeframeMap[timeframe] || timeframe;
+  const atrStop = technicals?.atr_stop ? technicals.atr_stop.toFixed(2) : 'N/A';
+  const volRatioLabel = technicals?.volume_ratio ? volLabel(technicals.volume_ratio) : 'N/A';
 
-Nguồn tham chiếu ưu tiên: ${activeSources}
+  return `Ban la chuyen gia phan tich chung khoan Viet Nam 15 nam kinh nghiem.
+Phan tich ${ticker} (${exchange}) khung ${tfLabel}.
+
+Nguon tham chieu uu tien: ${activeSources}
 ${liveDataPrompt}
-${additionalContext ? `Thông tin bổ sung từ người dùng: ${additionalContext}` : ''}
+${additionalContext ? `Thong tin bo sung tu nha dau tu: ${additionalContext}` : ''}
 
-Hãy đưa ra phân tích chi tiết theo cấu trúc chuẩn. Bạn phải sử dụng chính xác các số liệu thực tế ở trên để viết phân tích (đặc biệt là giá hiện tại, các đường MA và các chỉ số tài chính), tuyệt đối không tự bịa ra giá hoặc dùng giá cũ trong dữ liệu huấn luyện của bạn.`;
+YEU CAU PHAN TICH (cau truc chuan, toi da 450 tu):
+
+### 📊 TONG QUAN
+2-3 cau ve vi the hien tai va boi canh thi truong.
+
+### 📈 KY THUAT
+- **Xu huong chinh** + diem vao lenh toi uu
+- **RSI & Stochastic**: trang thai qua mua/ban va tin hieu giao cat
+- **MACD**: momentum dang tang hay giam, tin hieu giao cat gan nhat
+- **Volume**: ${volRatioLabel} - xac nhan hay phan ky voi gia?
+- **Vung ho tro/khang cu** quan trong nhat can theo doi
+
+### 📋 CO BAN
+- Dinh gia so voi nganh (re/dat/hop ly) + ly do ngan gon
+
+### 🎯 KE HOACH GIAO DICH (${tfLabel})
+| Kich ban | Xac suat | Muc tieu gia |
+|---|---|---|
+| 📈 TANG | ?% | ??? VND |
+| ➡️ CO SO | ?% | ??? VND |
+| 📉 GIAM | ?% | ??? VND |
+
+- **Vung mua toi uu**: ___
+- **Stop-loss**: ___ (ATRx1.5 = ${atrStop} VND tinh tu gia vao)
+- **Take-profit 1**: ___ | **Take-profit 2**: ___
+- **Ti le R:R**: ___ | **Ti trong goi y**: ___% von | **Nam giu du kien**: ___ ngay
+
+### ⚡ KHUYEN NGHI
+**BUY 🟢 / HOLD 🟡 / SELL 🔴** - [ly do 1 cau] - Do tin cay: ___%
+
+### ⚠️ RUI RO CHINH (top 3)
+1. ___ 2. ___ 3. ___
+
+---
+Phan tich tham khao, khong phai loi khuyen dau tu. Quyet dinh la trach nhiem cua nha dau tu.`;
 };
 
 // ===== QUICK PROMPTS CHO CHAT =====

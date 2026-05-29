@@ -1560,7 +1560,50 @@ const AnalyzePage = () => {
     toast.success(`Đã xóa ${t}`);
   }, []);
 
-  const handleAnalyze = useCallback(async ({ ticker, exchange, timeframe, sources }) => {
+  const handleAnalyze = useCallback(async ({ ticker, exchange, timeframe, sources, bypassCache = false }) => {
+    // 1. Kiểm tra cache ở Frontend trước khi gọi AI mới
+    const savedHistory = useAppStore.getState().history;
+    const existing = savedHistory.find(
+      (h) =>
+        h.ticker.toUpperCase() === ticker.toUpperCase() &&
+        (h.exchange || '').toUpperCase() === (exchange || 'HOSE').toUpperCase() &&
+        (h.timeframe || '').toUpperCase() === (timeframe || 'T3').toUpperCase()
+    );
+
+    // Kiểm tra xem cache có cùng ngày giao dịch hôm nay hay không
+    let isCacheValid = false;
+    if (existing && existing.timestamp) {
+      const cacheDate = new Date(existing.timestamp).toDateString();
+      const today = new Date().toDateString();
+      isCacheValid = cacheDate === today;
+    }
+
+    if (existing && isCacheValid && !bypassCache) {
+      console.log(`Frontend Cache HIT cho ${ticker} - ${timeframe}. Tải dữ liệu tức thì.`);
+      updateActiveAnalysis({
+        currentParams: { ticker, exchange, timeframe },
+        result: existing.result,
+        quarterlyData: existing.quarterlyData || null,
+        sentimentData: existing.sentimentData || null,
+        predictionData: existing.predictionData || null,
+        backtestResult: existing.backtestResult || null,
+        stock1Data: {
+          ohlcv: existing.ohlcv || [],
+          info: existing.stockInfo || null,
+          technicals: existing.technicals || null,
+          sr: existing.sr || null,
+          news: existing.news || []
+        },
+        compareMode: false,
+        compareTickers: [],
+      });
+      // Tải live chart data dưới nền để biểu đồ cập nhật thời gian thực
+      stock1.fetchAll(ticker, chartPeriod);
+      toast.success(`Đã tải nhanh kết quả phân tích ${timeframe} của ${ticker}`);
+      return;
+    }
+
+    // 2. Chạy phân tích AI mới khi không có cache hoặc bypassCache = true
     setCurrentParams({ ticker, exchange, timeframe });
     setResult(null);
     setCompareTickers([]); // Reset so sánh khi đổi mã chính
@@ -1594,6 +1637,7 @@ const AnalyzePage = () => {
     const aiResult = await analyze({
       systemPrompt: STOCK_ANALYST_SYSTEM_PROMPT,
       userPrompt: prompt,
+      bypassCache,
     });
 
     if (aiResult) {
@@ -1630,7 +1674,7 @@ const AnalyzePage = () => {
 
       updateSignal(ticker, signal);
     }
-  }, [analyze, stock1.fetchAll, chartPeriod, addToHistory, updateSignal]);
+  }, [analyze, stock1.fetchAll, chartPeriod, addToHistory, updateSignal, updateActiveAnalysis, setCurrentParams, setResult, setCompareTickers, setQuarterlyData, setSentimentData]);
 
   const handleReanalyze = useCallback(() => {
     if (!currentParams) return;
@@ -1639,6 +1683,7 @@ const AnalyzePage = () => {
       exchange: currentParams.exchange,
       timeframe: currentParams.timeframe,
       sources: settings.sources,
+      bypassCache: true,
     });
   }, [currentParams, settings.sources, handleAnalyze]);
 
@@ -1667,7 +1712,8 @@ const AnalyzePage = () => {
       const existing = savedHistory.find(
         (h) =>
           h.ticker.toUpperCase() === item.ticker.toUpperCase() &&
-          (h.exchange || '').toUpperCase() === (item.exchange || 'HOSE').toUpperCase()
+          (h.exchange || '').toUpperCase() === (item.exchange || 'HOSE').toUpperCase() &&
+          (h.timeframe || '').toUpperCase() === (item.timeframe || 'T3').toUpperCase()
       );
       if (existing) {
         updateActiveAnalysis({

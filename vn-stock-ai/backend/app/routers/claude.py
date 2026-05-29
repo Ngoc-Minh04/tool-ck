@@ -346,7 +346,7 @@ def _format_claude_messages(body: dict) -> list:
 def _get_smart_cache_ttl() -> int:
     """
     Tính toán thời gian cache thông minh dựa trên thời gian giao dịch của VN:
-    - Trong giờ giao dịch (Thứ 2 - Thứ 6, từ 9h00 đến 15h00): Cache 4 giờ (14400s)
+    - Trong giờ giao dịch (Thứ 2 - Thứ 6, từ 9h00 đến 15h00): Cache 8 giờ (28800s)
     - Ngoài giờ giao dịch & Cuối tuần: Cache 24 giờ (86400s)
     """
     import datetime
@@ -362,7 +362,7 @@ def _get_smart_cache_ttl() -> int:
     is_trading_hours = 540 <= time_in_minutes <= 900
     
     if is_trading_hours:
-        return 14400  # 4 giờ
+        return 28800  # 8 giờ
         
     return 86400  # 24 giờ
 
@@ -374,10 +374,11 @@ async def analyze(request: Request):
     client_key = request.headers.get("x-api-key", "")
     key, provider = _get_key_and_provider(client_key)
     stream = body.get("stream", False)
+    bypass_cache = body.get("bypass_cache", False)
 
     # 1. Kiểm tra cache cho các yêu cầu không stream để tiết kiệm lượt gọi AI
     cache_key = None
-    if not stream:
+    if not stream and not bypass_cache:
         import hashlib
         from app.services.cache_service import cache_get, cache_set
         hash_input = f"{body.get('system', '')}:{json.dumps(body.get('messages', []))}"

@@ -49,7 +49,8 @@ const useAppStore = create(
             (h) =>
               !(
                 h.ticker.toUpperCase() === entry.ticker.toUpperCase() &&
-                (h.exchange || '').toUpperCase() === (entry.exchange || '').toUpperCase()
+                (h.exchange || '').toUpperCase() === (entry.exchange || '').toUpperCase() &&
+                (h.timeframe || '').toUpperCase() === (entry.timeframe || '').toUpperCase()
               )
           );
           return {
