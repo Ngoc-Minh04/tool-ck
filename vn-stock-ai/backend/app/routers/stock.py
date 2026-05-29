@@ -133,11 +133,23 @@ async def support_resistance(ticker: str = Query(...), period: str = "3mo"):
 
 @router.get("/news")
 async def stock_news(ticker: str = Query(...)):
-    """Scrape tin tức liên quan mã CK từ CafeF"""
+    """Lấy tin tức liên quan mã CK từ vnstock (FiinGroup) hoặc fallback CafeF"""
     key = f"news:{ticker.upper()}"
     cached = await cache_get(key)
     if cached:
         return cached
+    
+    # 1. Thử lấy từ vnstock (FiinGroup)
+    try:
+        from app.services.vnstock_service import get_company_news
+        news = get_company_news(ticker)
+        if news:
+            await cache_set(key, news, ttl=1800)
+            return news
+    except Exception as e:
+        logger.warning(f"Failed to get news from vnstock for {ticker}: {e}")
+        
+    # 2. Fallback: Scrape từ CafeF
     try:
         url = f"https://s.cafef.vn/Ajax/PageNew.ashx?symbol={ticker.upper()}&tintuc=1"
         headers = {
@@ -171,6 +183,7 @@ async def stock_news(ticker: str = Query(...)):
     except Exception as e:
         logger.error(f"news error {ticker}: {e}")
         return []
+
 
 
 @router.get("/peers")

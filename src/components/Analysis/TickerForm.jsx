@@ -48,6 +48,32 @@ const TickerForm = ({ onAnalyze, onSelectStock, loading }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const activeAnalysis = useAppStore((s) => s.activeAnalysis);
+
+  // Đồng bộ form với mã đang được hiển thị phân tích thực tế
+  useEffect(() => {
+    if (activeAnalysis.currentParams) {
+      setTicker(activeAnalysis.currentParams.ticker);
+      setDebouncedTicker(activeAnalysis.currentParams.ticker);
+      setExchange(activeAnalysis.currentParams.exchange);
+      setTimeframe(activeAnalysis.currentParams.timeframe);
+    }
+  }, [activeAnalysis.currentParams]);
+
+  // Tự động phân tích lại khi chuyển đổi khung thời gian (chỉ khi đang xem kết quả của mã đó)
+  useEffect(() => {
+    const active = useAppStore.getState().activeAnalysis;
+    const t = debouncedTicker || ticker.toUpperCase().trim();
+    if (
+      t &&
+      active.currentParams?.ticker === t &&
+      active.result &&
+      timeframe !== active.currentParams?.timeframe
+    ) {
+      onAnalyze({ ticker: t, exchange, timeframe, sources: settings.sources });
+    }
+  }, [timeframe, debouncedTicker, ticker, exchange, onAnalyze, settings.sources]);
+
   const selectSuggestion = useCallback((item) => {
     setTicker(item.ticker);
     setDebouncedTicker(item.ticker);

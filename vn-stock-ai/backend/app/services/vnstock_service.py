@@ -986,7 +986,8 @@ def get_quarterly_financials(ticker: str) -> dict:
         if Vnstock_ is None:
             return _make_mock()
 
-        stock = Vnstock_().stock(symbol=ticker, source="TCBS")
+        # Dùng VCI vì TCBS không được hỗ trợ trong phiên bản này
+        stock = Vnstock_().stock(symbol=ticker, source="VCI")
         
         # Thử lấy income statement theo quý
         try:
@@ -994,7 +995,40 @@ def get_quarterly_financials(ticker: str) -> dict:
             if df is None or df.empty:
                 raise ValueError("empty income statement")
             
-            # Chuẩn hóa tên cột linh hoạt
+            # 1. Trường hợp giao diện VCI (nằm ngang: các hàng là chỉ tiêu, các cột là các quý)
+            if "item_id" in df.columns or "item" in df.columns:
+                id_col = "item_id" if "item_id" in df.columns else "item"
+                
+                # Trích xuất dòng doanh thu
+                rev_row = df[df[id_col].str.lower().str.contains("revenue_net|net_sale|gross_revenue|net_revenue", na=False)]
+                if rev_row.empty:
+                    rev_row = df[df["item"].str.lower().str.contains("doanh thu thuần|doanh thu bán hàng", na=False)]
+                
+                # Trích xuất dòng lợi nhuận sau thuế
+                profit_row = df[df[id_col].str.lower().str.contains("profit_after_tax|net_profit_after_tax|net_profit_loss_after_tax|net_profit", na=False)]
+                if profit_row.empty:
+                    profit_row = df[df["item"].str.lower().str.contains("lợi nhuận sau thuế", na=False)]
+                
+                if not rev_row.empty and not profit_row.empty:
+                    # Lấy các cột quý (loại trừ các cột thông tin mô tả)
+                    quarter_cols = [c for c in df.columns if c not in ("item", "item_en", "item_id")]
+                    quarter_cols = sorted(quarter_cols)
+                    
+                    rows = []
+                    # Lấy 8 quý gần nhất
+                    for q in quarter_cols[-8:]:
+                        rev_val = float(rev_row[q].values[0]) if not pd.isna(rev_row[q].values[0]) else 0.0
+                        profit_val = float(profit_row[q].values[0]) if not pd.isna(profit_row[q].values[0]) else 0.0
+                        rows.append({
+                            "quarter": q,
+                            "revenue": int(rev_val / 1e9),  # VND -> Tỷ VND
+                            "profit": int(profit_val / 1e9)
+                        })
+                    
+                    logger.info(f"Quarterly financials (VCI layout) for {ticker}: {len(rows)} quarters")
+                    return {"ticker": ticker, "data": rows, "is_mock": False}
+                    
+            # 2. Trường hợp giao diện TCBS cũ (nằm dọc: các hàng là quý, các cột là chỉ tiêu)
             df.columns = [str(c).lower().strip() for c in df.columns]
             rev_col    = next((c for c in df.columns if 'doanh thu' in c or 'revenue' in c or 'net_revenue' in c), None)
             profit_col = next((c for c in df.columns if 'lợi nhuận sau' in c or 'net_profit' in c or 'profit_after' in c), None)
@@ -1012,7 +1046,7 @@ def get_quarterly_financials(ticker: str) -> dict:
                     "profit":  int(row[profit_col] / 1e9) if pd.notna(row[profit_col]) else 0,
                 })
 
-            logger.info(f"Quarterly financials for {ticker}: {len(rows)} quarters")
+            logger.info(f"Quarterly financials (legacy layout) for {ticker}: {len(rows)} quarters")
             return {"ticker": ticker, "data": rows, "is_mock": False}
 
         except Exception as e:
@@ -1022,3 +1056,37 @@ def get_quarterly_financials(ticker: str) -> dict:
     except Exception as e:
         logger.error(f"get_quarterly_financials error for {ticker}: {e}")
         return _make_mock()
+
+
+def get_company_news(ticker: str) -> list:
+    """Lấy danh sách tin tức doanh nghiệp từ vnstock."""
+    ticker = ticker.upper()
+    try:
+        Vnstock_ = _get_vnstock()
+        if Vnstock_ is None:
+            return []
+        stock = Vnstock_().stock(symbol=ticker, source="VCI")
+        df = stock.company.news()
+        if df is None or df.empty:
+            return []
+        
+        rows = []
+        # Lấy tối đa 10 tin tức
+        for _, row in df.head(10).iterrows():
+            title = row.get("news_title", "")
+            if not title:
+                continue
+            rows.append({
+                "title": title,
+                "url": f"https://cafef.vn/co-phieu/{ticker}.chn",
+                "time": row.get("public_date", ""),
+            })
+        
+        logger.info(f"Retrieved {len(rows)} news items for {ticker} from vnstock")
+        return rows
+    except Exception as e:
+        logger.error(f"get_company_news error for {ticker}: {e}")
+        return []
+
+
+
