@@ -68,6 +68,26 @@ export const stockApi = {
     return res.data;
   },
 
+  async getAlertLogs() {
+    const res = await api.get('/alerts/logs');
+    return res.data?.data || res.data || [];
+  },
+
+  async clearAlertLogs() {
+    const res = await api.delete('/alerts/logs');
+    return res.data;
+  },
+
+  async bulkDeleteAlerts(ids) {
+    const res = await api.post('/alerts/bulk-delete', { ids });
+    return res.data;
+  },
+
+  async bulkUpdateAlertsStatus(ids, triggered) {
+    const res = await api.post('/alerts/bulk-status', { ids, triggered });
+    return res.data;
+  },
+
   async healthCheck() {
     try {
       await api.get('/health', { timeout: 10000 });

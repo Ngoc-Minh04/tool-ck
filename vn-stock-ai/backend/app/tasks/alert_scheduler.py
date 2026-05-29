@@ -8,7 +8,7 @@ scheduler = AsyncIOScheduler()
 from datetime import datetime
 
 async def check_alerts():
-    from app.services.database import get_all_alerts, update_alert
+    from app.services.database import get_all_alerts, update_alert, create_alert_log
     try:
         alerts = get_all_alerts()
     except Exception as e:
@@ -71,6 +71,10 @@ async def check_alerts():
             elif condition == "below":
                 hit = current <= target
                 trigger_reason = f"Đã xuống dưới {target:,.0f} VND"
+            elif condition == "volume_above":
+                current_vol = ohlcv[-1].get("volume", 0)
+                hit = current_vol >= target
+                trigger_reason = f"Khối lượng giao dịch vượt trên {target:,.0f} CP (Đạt: {current_vol:,.0f} CP)"
             elif condition == "pct_change_above":
                 hit = change_pct >= target
                 trigger_reason = f"Tăng trong phiên đạt +{change_pct:.2f}% (Ngưỡng: +{target}%)"
@@ -137,13 +141,24 @@ async def check_alerts():
                         trigger_reason = f"MACD nằm dưới đường Tín hiệu (Histogram: {macd_hist:.4f})"
 
             if hit:
-                msg = (
-                    f"<b>ALERT</b>: {alert['ticker']}\n"
-                    f"Gia hien tai: <b>{current:,.0f}</b> VND\n"
-                    f"Dieu kien: <b>{trigger_reason}</b>\n"
-                    f"Che do: {alert.get('mode', 'once')}\n"
-                    f"Ghi chu: {alert.get('note', '') or '—'}"
-                )
+                # Format message specifically for volume if needed
+                if condition == "volume_above":
+                    msg = (
+                        f"<b>ALERT (Khối lượng)</b>: {alert['ticker']}\n"
+                        f"Khối lượng hiện tại: <b>{ohlcv[-1].get('volume', 0):,.0f}</b> CP\n"
+                        f"Điều kiện: <b>{trigger_reason}</b>\n"
+                        f"Giá hiện tại: <b>{current:,.0f}</b> VND\n"
+                        f"Chế độ: {alert.get('mode', 'once')}\n"
+                        f"Ghi chú: {alert.get('note', '') or '—'}"
+                    )
+                else:
+                    msg = (
+                        f"<b>ALERT</b>: {alert['ticker']}\n"
+                        f"Gia hien tai: <b>{current:,.0f}</b> VND\n"
+                        f"Dieu kien: <b>{trigger_reason}</b>\n"
+                        f"Che do: {alert.get('mode', 'once')}\n"
+                        f"Ghi chu: {alert.get('note', '') or '—'}"
+                    )
                 await send_alert(alert.get("telegram_chat_id", ""), msg)
                 alert["triggered"] = True
                 alert["last_triggered_at"] = now.isoformat()
@@ -151,6 +166,25 @@ async def check_alerts():
                     "triggered": True,
                     "last_triggered_at": now.isoformat()
                 })
+                
+                # Write alert log
+                import uuid
+                log_id = str(uuid.uuid4())
+                log_data = {
+                    "id": log_id,
+                    "alert_id": alert["id"],
+                    "ticker": alert["ticker"],
+                    "condition": alert["condition"],
+                    "price": alert.get("price"),
+                    "trigger_price": current,
+                    "triggered_at": now.isoformat(),
+                    "note": alert.get("note")
+                }
+                try:
+                    create_alert_log(log_data)
+                except Exception as ex:
+                    logger.error(f"Error creating alert log: {ex}")
+
                 logger.info(f"Alert triggered: {alert['ticker']} {condition} {target} (Mode: {alert.get('mode')})")
         except Exception as e:
             logger.error(f"Alert check error for {alert.get('ticker')}: {e}")

@@ -2,12 +2,47 @@ from fastapi import APIRouter, HTTPException
 from app.models.schemas import AlertCreate
 from app.services.telegram_service import send_alert
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import uuid
-from app.services.database import get_all_alerts, create_alert as db_create_alert, update_alert, delete_alert as db_delete_alert
+from app.services.database import (
+    get_all_alerts, 
+    create_alert as db_create_alert, 
+    update_alert, 
+    delete_alert as db_delete_alert,
+    get_alert_logs,
+    clear_alert_logs,
+    bulk_delete_alerts,
+    bulk_update_alerts_status
+)
 
 router = APIRouter()
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
+class BulkStatusRequest(BaseModel):
+    ids: List[str]
+    triggered: bool
+
+@router.get("/logs")
+def get_logs():
+    return get_alert_logs()
+
+@router.delete("/logs")
+def clear_logs():
+    clear_alert_logs()
+    return {"status": "success", "message": "All alert logs cleared"}
+
+@router.post("/bulk-delete")
+def bulk_delete(body: BulkDeleteRequest):
+    success = bulk_delete_alerts(body.ids)
+    return {"status": "success", "deleted_count": len(body.ids) if success else 0}
+
+@router.post("/bulk-status")
+def bulk_status(body: BulkStatusRequest):
+    success = bulk_update_alerts_status(body.ids, body.triggered)
+    return {"status": "success", "updated_count": len(body.ids) if success else 0}
 
 @router.get("")
 def get_alerts():

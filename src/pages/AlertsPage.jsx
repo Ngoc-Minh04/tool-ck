@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Bell, Trash2, Plus, AlertCircle, CheckCircle, Clock, BellOff, RotateCcw,
   X, Users, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown,
-  Edit3, Send, Zap, TrendingUp, TrendingDown
+  Edit3, Send, Zap, TrendingUp, TrendingDown, Trash, ShieldAlert
 } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import { Button, EmptyState } from '../components/UI';
@@ -63,6 +63,7 @@ function getConditionName(cond) {
   switch (cond) {
     case 'above': return '📈 Vượt trên';
     case 'below': return '📉 Giảm dưới';
+    case 'volume_above': return '📊 KL vượt trên';
     case 'pct_change_above': return '⚡ Tăng phiên';
     case 'pct_change_below': return '⚡ Giảm phiên';
     case 'pct_change_abs': return '⚡ Biến động';
@@ -84,6 +85,7 @@ function getTargetDisplay(al) {
   if (al.condition.includes('ma') || al.condition.startsWith('macd_')) return '—';
   if (al.condition.startsWith('pct_change_')) return `+${al.price}%`;
   if (al.condition.startsWith('rsi_')) return `${al.price} (RSI)`;
+  if (al.condition === 'volume_above') return `${al.price.toLocaleString('vi-VN')} CP`;
   return `${al.price.toLocaleString('vi-VN')} đ`;
 }
 
@@ -93,8 +95,6 @@ function calcProgress(alert, currentPrice) {
   const target = alert.price;
 
   if (alert.condition === 'above') {
-    // Điều kiện: giá phải >= target. Progress từ giá thấp nhất đến target.
-    // Giả định giá bắt đầu từ 80% của target (điểm 0%)
     const startPrice = target * 0.8;
     const progress = Math.min(100, Math.max(0, ((currentPrice - startPrice) / (target - startPrice)) * 100));
     const diff = ((currentPrice - target) / target * 100).toFixed(2);
@@ -102,7 +102,6 @@ function calcProgress(alert, currentPrice) {
   }
 
   if (alert.condition === 'below') {
-    // Điều kiện: giá phải <= target. Progress khi giá tiến gần target từ trên xuống.
     const startPrice = target * 1.2;
     const progress = Math.min(100, Math.max(0, ((startPrice - currentPrice) / (startPrice - target)) * 100));
     const diff = ((currentPrice - target) / target * 100).toFixed(2);
@@ -111,6 +110,49 @@ function calcProgress(alert, currentPrice) {
 
   return null;
 }
+
+// ===== BIỂU ĐỒ MINI SPARKLINE =====
+const Sparkline = ({ quote }) => {
+  if (!quote || quote.high === undefined || quote.low === undefined || quote.open === undefined || quote.price === undefined) {
+    return <div className="w-[45px] h-[15px]" />;
+  }
+  const { open, low, high, price } = quote;
+  if (high === low) {
+    return (
+      <svg className="w-[45px] h-[15px]" style={{ overflow: 'visible' }}>
+        <line x1="0" y1="7.5" x2="45" y2="7.5" stroke="#64748b" strokeWidth="1.5" strokeDasharray="2,2" />
+      </svg>
+    );
+  }
+  
+  const mapY = (val) => {
+    // Chiều cao 15px. Map giá trị sao cho High nằm trên (Y=1) và Low nằm dưới (Y=14)
+    return 14 - ((val - low) / (high - low)) * 12;
+  };
+
+  const p0 = { x: 2, y: mapY(open) };
+  const p1 = { x: 15, y: mapY(low) };
+  const p2 = { x: 28, y: mapY(high) };
+  const p3 = { x: 43, y: mapY(price) };
+
+  const color = price >= open ? '#4ade80' : '#f87171';
+
+  return (
+    <div className="flex items-center" title={`Mở: ${open.toLocaleString()} | Thấp: ${low.toLocaleString()} | Cao: ${high.toLocaleString()} | Đóng: ${price.toLocaleString()}`}>
+      <svg className="w-[45px] h-[15px]" style={{ overflow: 'visible' }}>
+        <path
+          d={`M ${p0.x} ${p0.y} L ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx={p3.x} cy={p3.y} r="2" fill={color} />
+      </svg>
+    </div>
+  );
+};
 
 // ===== MODAL XÁC NHẬN XÓA =====
 const DeleteConfirmModal = ({ alert, onConfirm, onCancel }) => {
@@ -165,6 +207,58 @@ const DeleteConfirmModal = ({ alert, onConfirm, onCancel }) => {
   );
 };
 
+// ===== MODAL XÁC NHẬN XÓA HÀNG LOẠT =====
+const BulkDeleteConfirmModal = ({ isOpen, count, onConfirm, onCancel }) => {
+  if (!isOpen) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 space-y-4"
+        style={{
+          background: 'linear-gradient(135deg, #0d1b2a 0%, #1a2a3a 100%)',
+          border: '1px solid rgba(239,68,68,0.25)',
+          boxShadow: '0 25px 50px rgba(0,0,0,0.6)'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+              <ShieldAlert size={15} style={{ color: '#ef4444' }} />
+            </div>
+            <span className="text-sm font-semibold text-slate-200">Xóa hàng loạt</span>
+          </div>
+          <button onClick={onCancel} className="p-1 rounded-lg cursor-pointer border-none bg-transparent text-slate-500 hover:text-slate-300 transition-all">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="p-3 rounded-xl text-xs space-y-1" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <p className="text-slate-400">Bạn sắp xóa đồng thời:</p>
+          <p className="text-red-400 font-bold text-sm">{count} cảnh báo đã chọn</p>
+        </div>
+
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Hành động này <span className="text-red-400 font-semibold">không thể hoàn tác</span>. Toàn bộ cảnh báo đã chọn sẽ bị xóa vĩnh viễn khỏi hệ thống.
+        </p>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onCancel} className="flex-1 py-2 text-xs font-medium rounded-xl cursor-pointer border-none transition-all" style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
+            Hủy bỏ
+          </button>
+          <button onClick={onConfirm} className="flex-1 py-2 text-xs font-semibold rounded-xl cursor-pointer border-none transition-all" style={{ background: 'linear-gradient(135deg, #7f1d1d, #ef4444)', color: '#fff' }}>
+            Xóa {count} mục
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ===== MODAL CHỈNH SỬA CẢNH BÁO =====
 const EditAlertModal = ({ alert, onSave, onCancel }) => {
   const [condition, setCondition] = useState(alert?.condition || 'above');
@@ -178,6 +272,7 @@ const EditAlertModal = ({ alert, onSave, onCancel }) => {
   const isNoPriceCondition = condition.includes('ma') || condition.startsWith('macd_');
   const isPercentageCondition = condition.startsWith('pct_change_');
   const isRsiCondition = condition.startsWith('rsi_');
+  const isVolumeCondition = condition === 'volume_above';
 
   if (!alert) return null;
 
@@ -237,9 +332,10 @@ const EditAlertModal = ({ alert, onSave, onCancel }) => {
           <div>
             <label className="text-xs text-slate-500 block mb-1.5 font-medium">Điều kiện kích hoạt</label>
             <select value={condition} onChange={e => setCondition(e.target.value)} className="select-dark w-full text-sm">
-              <optgroup label="Cảnh báo giá">
-                <option value="above">Vượt lên trên (&gt;=)</option>
-                <option value="below">Giảm xuống dưới (&lt;=)</option>
+              <optgroup label="Cảnh báo giá & Khối lượng">
+                <option value="above">Giá vượt lên trên (&gt;=)</option>
+                <option value="below">Giá giảm xuống dưới (&lt;=)</option>
+                <option value="volume_above">Khối lượng vượt trên (&gt;=)</option>
               </optgroup>
               <optgroup label="Biến động trong ngày">
                 <option value="pct_change_above">Tăng quá (+ %)</option>
@@ -269,7 +365,7 @@ const EditAlertModal = ({ alert, onSave, onCancel }) => {
           {!isNoPriceCondition && (
             <div>
               <label className="text-xs text-slate-500 block mb-1.5 font-medium">
-                {isPercentageCondition ? 'Tỷ lệ biến động (%)' : isRsiCondition ? 'Chỉ số RSI (0–100)' : 'Giá mục tiêu (VNĐ)'}
+                {isPercentageCondition ? 'Tỷ lệ biến động (%)' : isRsiCondition ? 'Chỉ số RSI (0–100)' : isVolumeCondition ? 'Khối lượng mục tiêu (CP)' : 'Giá mục tiêu (VNĐ)'}
               </label>
               <input
                 type="number"
@@ -381,14 +477,21 @@ const SortIcon = ({ field, sortField, sortDir }) => {
 
 // ===== MAIN COMPONENT =====
 const AlertsPage = () => {
+  const [activeTab, setActiveTab] = useState('alerts'); // alerts | logs
   const [alerts, setAlerts] = useState([]);
+  const [alertLogs, setAlertLogs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentPrices, setCurrentPrices] = useState({}); // { ticker: { price, pct, is_live } }
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [currentPrices, setCurrentPrices] = useState({}); // { ticker: { price, pct, open, low, high } }
   const [pricesLoading, setPricesLoading] = useState(false);
+
+  // Checkbox Selection for Bulk Actions
+  const [selectedIds, setSelectedIds] = useState([]);
 
   // Modal state
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   // Filter & Search state
   const [searchTicker, setSearchTicker] = useState('');
@@ -418,6 +521,7 @@ const AlertsPage = () => {
   const isNoPriceCondition = condition.includes('ma') || condition.startsWith('macd_');
   const isPercentageCondition = condition.startsWith('pct_change_');
   const isRsiCondition = condition.startsWith('rsi_');
+  const isVolumeCondition = condition === 'volume_above';
 
   // Stats
   const totalAlerts = alerts.length;
@@ -430,12 +534,17 @@ const AlertsPage = () => {
     try {
       const data = await stockApi.getAlerts();
       setAlerts(data || []);
+      
+      // Clean up selected IDs that no longer exist
+      setSelectedIds(prev => prev.filter(id => (data || []).some(a => a.id === id)));
+
       (data || []).forEach(alert => {
         if (alert.triggered && !triggeredAlertsRef.current.has(alert.id)) {
           triggeredAlertsRef.current.add(alert.id);
           let condText = `đã chạm điều kiện`;
           if (alert.condition === 'above') condText = `vượt lên mức ${alert.price.toLocaleString('vi-VN')}đ`;
           else if (alert.condition === 'below') condText = `giảm xuống mức ${alert.price.toLocaleString('vi-VN')}đ`;
+          else if (alert.condition === 'volume_above') condText = `có khối lượng vượt ${alert.price.toLocaleString('vi-VN')} CP`;
           sendNotification(`⚡ Cảnh báo khớp! ${alert.ticker}`, `Cổ phiếu ${alert.ticker} ${condText}`, `alert-${alert.id}`);
         }
       });
@@ -447,9 +556,24 @@ const AlertsPage = () => {
     }
   }, [sendNotification]);
 
+  // Fetch alert logs
+  const fetchAlertLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const data = await stockApi.getAlertLogs();
+      setAlertLogs(data || []);
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+      toast.error('Không thể tải lịch sử cảnh báo');
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
   // Fetch current prices for alert tickers
   const fetchCurrentPrices = useCallback(async (alertList) => {
-    const tickers = [...new Set((alertList || alerts).filter(a => !a.triggered).map(a => a.ticker))];
+    const listToQuery = alertList || alerts;
+    const tickers = [...new Set(listToQuery.map(a => a.ticker))];
     if (!tickers.length) return;
     setPricesLoading(true);
     try {
@@ -475,12 +599,36 @@ const AlertsPage = () => {
     if (alerts.length > 0) {
       fetchCurrentPrices(alerts);
     }
-  }, [alerts.length]);
+  }, [alerts]);
+
+  // Fetch logs automatically if Tab Log is opened
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      fetchAlertLogs();
+    }
+  }, [activeTab, fetchAlertLogs]);
 
   // Sort handler
   const handleSort = (field) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
+  };
+
+  // Checkbox multi selection helpers
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const displayedIds = displayedAlerts.map(a => a.id);
+    const allSelected = displayedIds.length > 0 && displayedIds.every(id => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !displayedIds.includes(id)));
+    } else {
+      setSelectedIds(prev => [...new Set([...prev, ...displayedIds])]);
+    }
   };
 
   // Filtered & Sorted alerts
@@ -600,14 +748,59 @@ const AlertsPage = () => {
     }
   };
 
+  // Clear Alert Logs
+  const handleClearAllLogs = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử cảnh báo?')) return;
+    try {
+      await stockApi.clearAlertLogs();
+      toast.success('Đã xóa toàn bộ lịch sử gửi thành công!');
+      fetchAlertLogs();
+    } catch (err) {
+      toast.error('Lỗi khi xóa lịch sử');
+    }
+  };
+
+  // Bulk Actions
+  const handleBulkStatus = async (triggered) => {
+    if (selectedIds.length === 0) return;
+    const actionLabel = triggered ? 'Tạm dừng' : 'Kích hoạt';
+    try {
+      await stockApi.bulkUpdateAlertsStatus(selectedIds, triggered);
+      toast.success(`Đã ${actionLabel.toLowerCase()} ${selectedIds.length} cảnh báo!`);
+      setSelectedIds([]);
+      fetchAlerts();
+    } catch (err) {
+      toast.error(`Không thể ${actionLabel.toLowerCase()} các cảnh báo đã chọn`);
+    }
+  };
+
+  const handleBulkDeleteConfirm = () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleteOpen(true);
+  };
+
+  const handleExecuteBulkDelete = async () => {
+    try {
+      await stockApi.bulkDeleteAlerts(selectedIds);
+      toast.success(`Đã xóa thành công ${selectedIds.length} cảnh báo!`);
+      setSelectedIds([]);
+      fetchAlerts();
+    } catch (err) {
+      toast.error('Lỗi khi xóa các cảnh báo đã chọn');
+    } finally {
+      setBulkDeleteOpen(false);
+    }
+  };
+
   return (
     <>
       {/* Modals */}
       <DeleteConfirmModal alert={deleteTarget} onConfirm={handleConfirmDelete} onCancel={() => setDeleteTarget(null)} />
       <EditAlertModal alert={editTarget} onSave={handleSaveEdit} onCancel={() => setEditTarget(null)} />
+      <BulkDeleteConfirmModal isOpen={bulkDeleteOpen} count={selectedIds.length} onConfirm={handleExecuteBulkDelete} onCancel={() => setBulkDeleteOpen(false)} />
 
       <div className="flex flex-col h-full overflow-hidden">
-        <Header title="Cảnh báo giá" />
+        <Header title="Cảnh báo giá & Khối lượng" />
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -638,9 +831,10 @@ const AlertsPage = () => {
                 <div>
                   <label className="text-xs text-slate-500 block mb-1.5 font-medium">Điều kiện kích hoạt</label>
                   <select value={condition} onChange={e => setCondition(e.target.value)} className="select-dark w-full text-sm">
-                    <optgroup label="Cảnh báo giá">
-                      <option value="above">Vượt lên trên (&gt;=)</option>
-                      <option value="below">Giảm xuống dưới (&lt;=)</option>
+                    <optgroup label="Cảnh báo giá & Khối lượng">
+                      <option value="above">Giá vượt lên trên (&gt;=)</option>
+                      <option value="below">Giá giảm xuống dưới (&lt;=)</option>
+                      <option value="volume_above">Khối lượng vượt trên (&gt;=)</option>
                     </optgroup>
                     <optgroup label="Biến động trong ngày">
                       <option value="pct_change_above">Tăng quá (+ %)</option>
@@ -689,19 +883,20 @@ const AlertsPage = () => {
                   </div>
                 )}
 
-                {/* Price */}
+                {/* Target Price or Volume */}
                 {!isNoPriceCondition && (
                   <div>
                     <label className="text-xs text-slate-500 block mb-1.5 font-medium">
                       {isPercentageCondition && 'Tỷ lệ biến động (%)'}
                       {isRsiCondition && 'Chỉ số RSI (0–100)'}
-                      {!isPercentageCondition && !isRsiCondition && 'Giá mục tiêu (VNĐ)'}
+                      {isVolumeCondition && 'Khối lượng mục tiêu (Cổ phiếu)'}
+                      {!isPercentageCondition && !isRsiCondition && !isVolumeCondition && 'Giá mục tiêu (VNĐ)'}
                     </label>
                     <input
                       type="number"
                       value={price}
                       onChange={e => setPrice(e.target.value)}
-                      placeholder={isPercentageCondition ? 'Ví dụ: 5' : isRsiCondition ? 'Ví dụ: 30' : 'Ví dụ: 75000'}
+                      placeholder={isPercentageCondition ? 'Ví dụ: 5' : isRsiCondition ? 'Ví dụ: 30' : isVolumeCondition ? 'Ví dụ: 1000000' : 'Ví dụ: 75000'}
                       className="input-dark w-full text-sm font-num"
                       required
                       min="0"
@@ -780,10 +975,10 @@ const AlertsPage = () => {
               </form>
             </div>
 
-            {/* === CỘT PHẢI: DANH SÁCH === */}
+            {/* === CỘT PHẢI: DANH SÁCH & TABS === */}
             <div className="xl:col-span-2 space-y-4">
 
-              {/* THỐNG KÊ */}
+              {/* STATS PANELS */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl p-3 flex flex-col gap-1" style={{ background: 'rgba(79,195,247,0.06)', border: '1px solid rgba(79,195,247,0.12)' }}>
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider">Tổng cảnh báo</span>
@@ -799,251 +994,416 @@ const AlertsPage = () => {
                 </div>
               </div>
 
-              {/* TOOLBAR: Tìm kiếm + Lọc + Nút thông báo */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[140px]">
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="text"
-                    value={searchTicker}
-                    onChange={e => setSearchTicker(e.target.value)}
-                    placeholder="Tìm mã CK..."
-                    className="input-dark w-full text-xs pl-7 py-1.5"
-                  />
-                </div>
-
-                {/* Status filter */}
-                <div className="relative">
-                  <Filter size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <select
-                    value={statusFilter}
-                    onChange={e => setStatusFilter(e.target.value)}
-                    className="select-dark text-xs pl-7 pr-2 py-1.5 min-w-[110px]"
-                    style={{ paddingRight: '8px' }}
-                  >
-                    <option value="all">Tất cả</option>
-                    <option value="waiting">Đang chờ</option>
-                    <option value="triggered">Đã báo</option>
-                  </select>
-                </div>
-
-                {/* Push notification toggle */}
+              {/* TAB SELECTOR */}
+              <div className="flex gap-2 p-1 rounded-xl bg-slate-900/60 border border-slate-800/40 w-fit">
                 <button
-                  onClick={requestPermission}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer border-none transition-all font-medium flex-shrink-0"
+                  onClick={() => setActiveTab('alerts')}
+                  className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer border-none"
                   style={{
-                    background: permission === 'granted' ? 'rgba(74,222,128,0.1)' : 'rgba(79,195,247,0.1)',
-                    color: permission === 'granted' ? '#4ade80' : '#4fc3f7',
-                    border: `1px solid ${permission === 'granted' ? 'rgba(74,222,128,0.3)' : 'rgba(79,195,247,0.2)'}`,
+                    background: activeTab === 'alerts' ? 'linear-gradient(135deg, #1a3a5c, #4fc3f7)' : 'transparent',
+                    color: activeTab === 'alerts' ? '#0d1b2a' : '#94a3b8'
                   }}
                 >
-                  {permission === 'granted' ? <Bell size={11} /> : <BellOff size={11} />}
-                  {permission === 'granted' ? 'Thông báo bật' : 'Bật thông báo'}
+                  🔔 Cảnh báo hoạt động
+                </button>
+                <button
+                  onClick={() => setActiveTab('logs')}
+                  className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer border-none"
+                  style={{
+                    background: activeTab === 'logs' ? 'linear-gradient(135deg, #1a3a5c, #4fc3f7)' : 'transparent',
+                    color: activeTab === 'logs' ? '#0d1b2a' : '#94a3b8'
+                  }}
+                >
+                  📜 Lịch sử thông báo
                 </button>
               </div>
 
-              {/* BẢNG CẢNH BÁO */}
-              {loading && alerts.length === 0 ? (
-                <div className="glass-card p-6 text-center text-slate-500 text-xs">Đang tải dữ liệu...</div>
-              ) : displayedAlerts.length === 0 && (searchTicker || statusFilter !== 'all') ? (
-                <div className="glass-card p-6 text-center text-slate-500 text-xs">
-                  Không tìm thấy cảnh báo phù hợp
-                </div>
-              ) : alerts.length === 0 ? (
-                <EmptyState icon="🔔" title="Chưa có cảnh báo nào" description="Thiết lập các mốc giá quan trọng để nhận thông báo tức thời khi thị trường biến động." />
-              ) : (
-                <div className="glass-card overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="text-slate-500 border-b border-slate-800 bg-slate-900/30">
-                          {/* Sortable: Mã CK */}
-                          <th
-                            className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-300 transition-colors"
-                            onClick={() => handleSort('ticker')}
-                          >
-                            <div className="flex items-center gap-1">
-                              Mã CK <SortIcon field="ticker" sortField={sortField} sortDir={sortDir} />
-                            </div>
-                          </th>
-                          <th className="py-2.5 px-3">Điều kiện</th>
-                          {/* Sortable: Mục tiêu */}
-                          <th
-                            className="py-2.5 px-3 text-right cursor-pointer select-none hover:text-slate-300 transition-colors"
-                            onClick={() => handleSort('price')}
-                          >
-                            <div className="flex items-center justify-end gap-1">
-                              Mục tiêu <SortIcon field="price" sortField={sortField} sortDir={sortDir} />
-                            </div>
-                          </th>
-                          <th className="py-2.5 px-3 text-right">Giá HT</th>
-                          <th className="py-2.5 px-3">Tiến độ</th>
-                          {/* Sortable: Trạng thái */}
-                          <th
-                            className="py-2.5 px-3 text-center cursor-pointer select-none hover:text-slate-300 transition-colors"
-                            onClick={() => handleSort('triggered')}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Trạng thái <SortIcon field="triggered" sortField={sortField} sortDir={sortDir} />
-                            </div>
-                          </th>
-                          <th className="py-2.5 px-3">Chế độ</th>
-                          <th className="py-2.5 px-3">Ghi chú</th>
-                          {/* Sortable: Ngày tạo */}
-                          <th
-                            className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-300 transition-colors"
-                            onClick={() => handleSort('created_at')}
-                          >
-                            <div className="flex items-center gap-1">
-                              Tạo lúc <SortIcon field="created_at" sortField={sortField} sortDir={sortDir} />
-                            </div>
-                          </th>
-                          <th className="py-2.5 px-3">Báo lúc</th>
-                          <th className="py-2.5 px-3 text-right">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/40">
-                        {displayedAlerts.map(alert => {
-                          const dateStr = alert.created_at
-                            ? format(new Date(alert.created_at), 'dd/MM HH:mm', { locale: vi })
-                            : '—';
-                          const triggeredStr = alert.last_triggered_at
-                            ? format(new Date(alert.last_triggered_at), 'dd/MM HH:mm', { locale: vi })
-                            : '—';
+              {/* === TAB 1: CẢNH BÁO HOẠT ĐỘNG === */}
+              {activeTab === 'alerts' && (
+                <div className="space-y-4">
+                  {/* TOOLBAR: Tìm kiếm + Lọc + Nút thông báo */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-[140px]">
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="text"
+                        value={searchTicker}
+                        onChange={e => setSearchTicker(e.target.value)}
+                        placeholder="Tìm mã CK..."
+                        className="input-dark w-full text-xs pl-7 py-1.5"
+                      />
+                    </div>
 
-                          const currentQ = currentPrices[alert.ticker];
-                          const currentPrice = currentQ?.price;
-                          const pct = currentQ?.pct;
+                    {/* Status filter */}
+                    <div className="relative">
+                      <Filter size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <select
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value)}
+                        className="select-dark text-xs pl-7 pr-2 py-1.5 min-w-[110px]"
+                        style={{ paddingRight: '8px' }}
+                      >
+                        <option value="all">Tất cả</option>
+                        <option value="waiting">Đang chờ</option>
+                        <option value="triggered">Đã báo</option>
+                      </select>
+                    </div>
 
-                          const progressInfo = calcProgress(alert, currentPrice);
-
-                          return (
-                            <tr
-                              key={alert.id}
-                              className="hover:bg-slate-800/20 transition-all"
-                              style={{ background: alert.triggered ? 'rgba(255,255,255,0.01)' : 'transparent' }}
-                            >
-                              <td className="py-2.5 px-3 font-bold text-slate-200">{alert.ticker}</td>
-                              <td className="py-2.5 px-3 text-slate-300">{getConditionName(alert.condition)}</td>
-                              <td className="py-2.5 px-3 text-right font-num font-semibold text-slate-300">
-                                {getTargetDisplay(alert)}
-                              </td>
-
-                              {/* Giá hiện tại */}
-                              <td className="py-2.5 px-3 text-right font-num whitespace-nowrap">
-                                {currentPrice ? (
-                                  <div className="flex flex-col items-end">
-                                    <span className="font-semibold text-slate-200">
-                                      {currentPrice.toLocaleString('vi-VN')}đ
-                                    </span>
-                                    {pct !== undefined && (
-                                      <span
-                                        className="text-[10px] font-medium flex items-center gap-0.5"
-                                        style={{ color: pct >= 0 ? '#4ade80' : '#f87171' }}
-                                      >
-                                        {pct >= 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
-                                        {pct >= 0 ? '+' : ''}{pct}%
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-700 text-[10px]">
-                                    {pricesLoading ? '...' : '—'}
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Thanh tiến trình */}
-                              <td className="py-2.5 px-3" style={{ minWidth: '110px' }}>
-                                {alert.triggered ? (
-                                  <span className="text-[10px] text-slate-600 italic">Đã báo</span>
-                                ) : progressInfo ? (
-                                  <ProgressBar
-                                    progress={progressInfo.progress}
-                                    color={progressInfo.color}
-                                    label={progressInfo.label}
-                                  />
-                                ) : (
-                                  <span className="text-[10px] text-slate-700">—</span>
-                                )}
-                              </td>
-
-                              {/* Trạng thái */}
-                              <td className="py-2.5 px-3 text-center">
-                                {alert.triggered ? (
-                                  alert.mode === 'continuous' ? (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.1)', color: '#eab308' }}>
-                                      <Clock size={10} /> Đã báo (Liên tục)
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
-                                      <CheckCircle size={10} /> Đã báo
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(79,195,247,0.1)', color: '#4fc3f7' }}>
-                                    <Clock size={10} /> Chờ
-                                  </span>
-                                )}
-                              </td>
-
-                              <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">
-                                {alert.mode === 'once' && '1 lần'}
-                                {alert.mode === 'daily' && 'Mỗi ngày'}
-                                {alert.mode === 'continuous' && `Liên tục (${alert.cooldown || 15}p)`}
-                                {!alert.mode && '1 lần'}
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-500 max-w-[100px] truncate" title={alert.note}>
-                                {alert.note || '—'}
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-500 font-num whitespace-nowrap">{dateStr}</td>
-                              <td className="py-2.5 px-3 font-num whitespace-nowrap" style={{ color: alert.last_triggered_at ? '#4ade80' : '#475569' }}>
-                                {triggeredStr}
-                              </td>
-
-                              {/* Thao tác */}
-                              <td className="py-2.5 px-3 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  {/* Nút sửa */}
-                                  <button
-                                    onClick={() => setEditTarget(alert)}
-                                    title="Chỉnh sửa cảnh báo"
-                                    className="p-1 hover:bg-cyan-500/10 rounded text-slate-500 hover:text-cyan-400 transition-all cursor-pointer border-none bg-transparent"
-                                  >
-                                    <Edit3 size={12} />
-                                  </button>
-                                  {/* Nút kích hoạt lại */}
-                                  {alert.triggered && (
-                                    <button
-                                      onClick={() => handleReactivateAlert(alert.id)}
-                                      title="Kích hoạt lại cảnh báo"
-                                      className="p-1 hover:bg-green-500/10 rounded text-slate-500 hover:text-green-400 transition-all cursor-pointer border-none bg-transparent"
-                                    >
-                                      <RotateCcw size={12} />
-                                    </button>
-                                  )}
-                                  {/* Nút xóa */}
-                                  <button
-                                    onClick={() => handleAskDelete(alert)}
-                                    className="p-1 hover:bg-red-500/10 rounded text-slate-500 hover:text-red-400 transition-all cursor-pointer border-none bg-transparent"
-                                    title="Xóa cảnh báo"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    {/* Push notification toggle */}
+                    <button
+                      onClick={requestPermission}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer border-none transition-all font-medium flex-shrink-0"
+                      style={{
+                        background: permission === 'granted' ? 'rgba(74,222,128,0.1)' : 'rgba(79,195,247,0.1)',
+                        color: permission === 'granted' ? '#4ade80' : '#4fc3f7',
+                        border: `1px solid ${permission === 'granted' ? 'rgba(74,222,128,0.3)' : 'rgba(79,195,247,0.2)'}`,
+                      }}
+                    >
+                      {permission === 'granted' ? <Bell size={11} /> : <BellOff size={11} />}
+                      {permission === 'granted' ? 'Thông báo bật' : 'Bật thông báo'}
+                    </button>
                   </div>
 
-                  {/* Footer table info */}
-                  {(searchTicker || statusFilter !== 'all') && (
-                    <div className="px-3 py-2 text-[10px] text-slate-600 border-t border-slate-800/40">
-                      Hiển thị {displayedAlerts.length} / {totalAlerts} cảnh báo
+                  {/* BULK ACTIONS TOOLBAR */}
+                  {selectedIds.length > 0 && (
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-cyan-500/25 bg-[#0d1b2a]/95 backdrop-blur-md transition-all shadow-lg shadow-black/40">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={true}
+                          onChange={toggleSelectAll}
+                          className="w-4 h-4 cursor-pointer accent-cyan-400"
+                        />
+                        <span className="text-xs text-slate-300">
+                          Đã chọn <strong className="text-cyan-400 font-num">{selectedIds.length}</strong> cảnh báo
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleBulkStatus(false)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/25 transition-all cursor-pointer"
+                        >
+                          <RotateCcw size={10} /> Kích hoạt lại
+                        </button>
+                        <button
+                          onClick={() => handleBulkStatus(true)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/25 transition-all cursor-pointer"
+                        >
+                          <Clock size={10} /> Tạm dừng
+                        </button>
+                        <button
+                          onClick={handleBulkDeleteConfirm}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 transition-all cursor-pointer"
+                        >
+                          <Trash2 size={10} /> Xóa mục chọn
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BẢNG CẢNH BÁO */}
+                  {loading && alerts.length === 0 ? (
+                    <div className="glass-card p-6 text-center text-slate-500 text-xs">Đang tải dữ liệu...</div>
+                  ) : displayedAlerts.length === 0 && (searchTicker || statusFilter !== 'all') ? (
+                    <div className="glass-card p-6 text-center text-slate-500 text-xs">
+                      Không tìm thấy cảnh báo phù hợp
+                    </div>
+                  ) : alerts.length === 0 ? (
+                    <EmptyState icon="🔔" title="Chưa có cảnh báo nào" description="Thiết lập các mốc giá quan trọng để nhận thông báo tức thời khi thị trường biến động." />
+                  ) : (
+                    <div className="glass-card overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-slate-800 bg-slate-900/30">
+                              {/* Checkbox Select All */}
+                              <th className="py-2.5 px-3 w-8 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={displayedAlerts.length > 0 && displayedAlerts.every(a => selectedIds.includes(a.id))}
+                                  onChange={toggleSelectAll}
+                                  className="w-4 h-4 cursor-pointer accent-cyan-400"
+                                />
+                              </th>
+                              {/* Sortable: Mã CK */}
+                              <th
+                                className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-300 transition-colors"
+                                onClick={() => handleSort('ticker')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Mã CK <SortIcon field="ticker" sortField={sortField} sortDir={sortDir} />
+                                </div>
+                              </th>
+                              <th className="py-2.5 px-3">Điều kiện</th>
+                              {/* Sortable: Mục tiêu */}
+                              <th
+                                className="py-2.5 px-3 text-right cursor-pointer select-none hover:text-slate-300 transition-colors"
+                                onClick={() => handleSort('price')}
+                              >
+                                <div className="flex items-center justify-end gap-1">
+                                  Mục tiêu <SortIcon field="price" sortField={sortField} sortDir={sortDir} />
+                                </div>
+                              </th>
+                              <th className="py-2.5 px-3 text-right">Giá HT</th>
+                              <th className="py-2.5 px-3">Tiến độ</th>
+                              {/* Sortable: Trạng thái */}
+                              <th
+                                className="py-2.5 px-3 text-center cursor-pointer select-none hover:text-slate-300 transition-colors"
+                                onClick={() => handleSort('triggered')}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  Trạng thái <SortIcon field="triggered" sortField={sortField} sortDir={sortDir} />
+                                </div>
+                              </th>
+                              <th className="py-2.5 px-3">Chế độ</th>
+                              <th className="py-2.5 px-3">Ghi chú</th>
+                              {/* Sortable: Ngày tạo */}
+                              <th
+                                className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-300 transition-colors"
+                                onClick={() => handleSort('created_at')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Tạo lúc <SortIcon field="created_at" sortField={sortField} sortDir={sortDir} />
+                                </div>
+                              </th>
+                              <th className="py-2.5 px-3">Báo lúc</th>
+                              <th className="py-2.5 px-3 text-right">Thao tác</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/40">
+                            {displayedAlerts.map(alert => {
+                              const dateStr = alert.created_at
+                                ? format(new Date(alert.created_at), 'dd/MM HH:mm', { locale: vi })
+                                : '—';
+                              const triggeredStr = alert.last_triggered_at
+                                ? format(new Date(alert.last_triggered_at), 'dd/MM HH:mm', { locale: vi })
+                                : '—';
+
+                              const currentQ = currentPrices[alert.ticker];
+                              const currentPrice = currentQ?.price;
+                              const pct = currentQ?.pct;
+
+                              // Only calculate progress for normal above/below price triggers
+                              const progressInfo = (alert.condition === 'above' || alert.condition === 'below')
+                                ? calcProgress(alert, currentPrice)
+                                : null;
+
+                              return (
+                                <tr
+                                  key={alert.id}
+                                  className="hover:bg-slate-800/20 transition-all"
+                                  style={{ background: alert.triggered ? 'rgba(255,255,255,0.01)' : 'transparent' }}
+                                >
+                                  {/* Row Checkbox */}
+                                  <td className="py-2.5 px-3 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedIds.includes(alert.id)}
+                                      onChange={() => toggleSelect(alert.id)}
+                                      className="w-4 h-4 cursor-pointer accent-cyan-400"
+                                    />
+                                  </td>
+                                  <td className="py-2.5 px-3 font-bold text-slate-200">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-num tracking-wide">{alert.ticker}</span>
+                                      <Sparkline quote={currentQ} />
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-slate-300">{getConditionName(alert.condition)}</td>
+                                  <td className="py-2.5 px-3 text-right font-num font-semibold text-slate-300">
+                                    {getTargetDisplay(alert)}
+                                  </td>
+
+                                  {/* Giá hiện tại */}
+                                  <td className="py-2.5 px-3 text-right font-num whitespace-nowrap">
+                                    {currentPrice ? (
+                                      <div className="flex flex-col items-end">
+                                        <span className="font-semibold text-slate-200">
+                                          {currentPrice.toLocaleString('vi-VN')}đ
+                                        </span>
+                                        {pct !== undefined && (
+                                          <span
+                                            className="text-[10px] font-medium flex items-center gap-0.5"
+                                            style={{ color: pct >= 0 ? '#4ade80' : '#f87171' }}
+                                          >
+                                            {pct >= 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+                                            {pct >= 0 ? '+' : ''}{pct}%
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-700 text-[10px]">
+                                        {pricesLoading ? '...' : '—'}
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  {/* Thanh tiến trình */}
+                                  <td className="py-2.5 px-3" style={{ minWidth: '110px' }}>
+                                    {alert.triggered ? (
+                                      <span className="text-[10px] text-slate-600 italic">Đã báo</span>
+                                    ) : progressInfo ? (
+                                      <ProgressBar
+                                        progress={progressInfo.progress}
+                                        color={progressInfo.color}
+                                        label={progressInfo.label}
+                                      />
+                                    ) : (
+                                      <span className="text-[10px] text-slate-700">—</span>
+                                    )}
+                                  </td>
+
+                                  {/* Trạng thái */}
+                                  <td className="py-2.5 px-3 text-center">
+                                    {alert.triggered ? (
+                                      alert.mode === 'continuous' ? (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(234,179,8,0.1)', color: '#eab308' }}>
+                                          <Clock size={10} /> Đã báo (Liên tục)
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
+                                          <CheckCircle size={10} /> Đã báo
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(79,195,247,0.1)', color: '#4fc3f7' }}>
+                                        <Clock size={10} /> Chờ
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">
+                                    {alert.mode === 'once' && '1 lần'}
+                                    {alert.mode === 'daily' && 'Mỗi ngày'}
+                                    {alert.mode === 'continuous' && `Liên tục (${alert.cooldown || 15}p)`}
+                                    {!alert.mode && '1 lần'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-slate-500 max-w-[100px] truncate" title={alert.note}>
+                                    {alert.note || '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-slate-500 font-num whitespace-nowrap">{dateStr}</td>
+                                  <td className="py-2.5 px-3 font-num whitespace-nowrap" style={{ color: alert.last_triggered_at ? '#4ade80' : '#475569' }}>
+                                    {triggeredStr}
+                                  </td>
+
+                                  {/* Thao tác */}
+                                  <td className="py-2.5 px-3 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      {/* Nút sửa */}
+                                      <button
+                                        onClick={() => setEditTarget(alert)}
+                                        title="Chỉnh sửa cảnh báo"
+                                        className="p-1 hover:bg-cyan-500/10 rounded text-slate-500 hover:text-cyan-400 transition-all cursor-pointer border-none bg-transparent"
+                                      >
+                                        <Edit3 size={12} />
+                                      </button>
+                                      {/* Nút kích hoạt lại */}
+                                      {alert.triggered && (
+                                        <button
+                                          onClick={() => handleReactivateAlert(alert.id)}
+                                          title="Kích hoạt lại cảnh báo"
+                                          className="p-1 hover:bg-green-500/10 rounded text-slate-500 hover:text-green-400 transition-all cursor-pointer border-none bg-transparent"
+                                        >
+                                          <RotateCcw size={12} />
+                                        </button>
+                                      )}
+                                      {/* Nút xóa */}
+                                      <button
+                                        onClick={() => handleAskDelete(alert)}
+                                        className="p-1 hover:bg-red-500/10 rounded text-slate-500 hover:text-red-400 transition-all cursor-pointer border-none bg-transparent"
+                                        title="Xóa cảnh báo"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Footer table info */}
+                      {(searchTicker || statusFilter !== 'all') && (
+                        <div className="px-3 py-2 text-[10px] text-slate-600 border-t border-slate-800/40">
+                          Hiển thị {displayedAlerts.length} / {totalAlerts} cảnh báo
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* === TAB 2: LỊCH SỬ THÔNG BÁO === */}
+              {activeTab === 'logs' && (
+                <div className="space-y-4">
+                  {/* Logs Header toolbar */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400 font-medium">
+                      📜 Nhật ký 100 thông báo gần nhất được gửi từ hệ thống
+                    </span>
+                    <button
+                      onClick={handleClearAllLogs}
+                      disabled={alertLogs.length === 0 || logsLoading}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash size={12} />
+                      Xóa lịch sử
+                    </button>
+                  </div>
+
+                  {/* Logs Table */}
+                  {logsLoading && alertLogs.length === 0 ? (
+                    <div className="glass-card p-6 text-center text-slate-500 text-xs">Đang tải lịch sử...</div>
+                  ) : alertLogs.length === 0 ? (
+                    <EmptyState icon="📜" title="Lịch sử trống" description="Chưa ghi nhận thông báo nào được gửi đi gần đây." />
+                  ) : (
+                    <div className="glass-card overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-slate-800 bg-slate-900/30">
+                              <th className="py-2.5 px-3">Mã CK</th>
+                              <th className="py-2.5 px-3">Điều kiện</th>
+                              <th className="py-2.5 px-3 text-right">Mức kích hoạt</th>
+                              <th className="py-2.5 px-3 text-right">Giá thực tế lúc báo</th>
+                              <th className="py-2.5 px-3">Gửi lúc</th>
+                              <th className="py-2.5 px-3">Ghi chú</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/40">
+                            {alertLogs.map(log => {
+                              const timeStr = log.triggered_at
+                                ? format(new Date(log.triggered_at), 'dd/MM/yyyy HH:mm:ss', { locale: vi })
+                                : '—';
+
+                              return (
+                                <tr key={log.id} className="hover:bg-slate-800/10 transition-all">
+                                  <td className="py-2.5 px-3 font-bold text-slate-200">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-num tracking-wide">{log.ticker}</span>
+                                      <Sparkline quote={currentPrices[log.ticker]} />
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-slate-300">{getConditionName(log.condition)}</td>
+                                  <td className="py-2.5 px-3 text-right font-num font-semibold text-slate-300">
+                                    {getTargetDisplay(log)}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-num font-semibold text-cyan-400">
+                                    {log.trigger_price ? `${log.trigger_price.toLocaleString('vi-VN')} đ` : '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-slate-500 font-num">{timeStr}</td>
+                                  <td className="py-2.5 px-3 text-slate-500 max-w-[140px] truncate" title={log.note}>
+                                    {log.note || '—'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>

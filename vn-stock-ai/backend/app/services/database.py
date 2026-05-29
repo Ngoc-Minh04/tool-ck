@@ -28,6 +28,18 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS alert_logs (
+                id TEXT PRIMARY KEY,
+                alert_id TEXT,
+                ticker TEXT NOT NULL,
+                condition TEXT NOT NULL,
+                price REAL,
+                trigger_price REAL,
+                triggered_at TEXT NOT NULL,
+                note TEXT
+            )
+        """)
         conn.commit()
     migrate_json_to_sqlite()
 
@@ -124,5 +136,54 @@ def update_alert(alert_id: str, updates: Dict) -> bool:
 def delete_alert(alert_id: str) -> bool:
     with get_db_connection() as conn:
         cursor = conn.execute("DELETE FROM alerts WHERE id = ?", (alert_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+def get_alert_logs() -> List[Dict]:
+    with get_db_connection() as conn:
+        rows = conn.execute("SELECT * FROM alert_logs ORDER BY triggered_at DESC LIMIT 100").fetchall()
+        return [dict(r) for r in rows]
+
+def create_alert_log(log_data: Dict) -> Dict:
+    with get_db_connection() as conn:
+        conn.execute("""
+            INSERT INTO alert_logs (id, alert_id, ticker, condition, price, trigger_price, triggered_at, note)
+            VALUES (:id, :alert_id, :ticker, :condition, :price, :trigger_price, :triggered_at, :note)
+        """, {
+            "id": log_data["id"],
+            "alert_id": log_data.get("alert_id"),
+            "ticker": log_data["ticker"],
+            "condition": log_data["condition"],
+            "price": log_data.get("price"),
+            "trigger_price": log_data.get("trigger_price"),
+            "triggered_at": log_data["triggered_at"],
+            "note": log_data.get("note")
+        })
+        conn.commit()
+    return log_data
+
+def clear_alert_logs() -> bool:
+    with get_db_connection() as conn:
+        cursor = conn.execute("DELETE FROM alert_logs")
+        conn.commit()
+        return True
+
+def bulk_delete_alerts(ids: List[str]) -> bool:
+    if not ids:
+        return False
+    placeholders = ", ".join("?" for _ in ids)
+    with get_db_connection() as conn:
+        cursor = conn.execute(f"DELETE FROM alerts WHERE id IN ({placeholders})", ids)
+        conn.commit()
+        return cursor.rowcount > 0
+
+def bulk_update_alerts_status(ids: List[str], triggered: bool) -> bool:
+    if not ids:
+        return False
+    placeholders = ", ".join("?" for _ in ids)
+    status_val = 1 if triggered else 0
+    with get_db_connection() as conn:
+        # We pass status_val as the first param, then the IDs
+        cursor = conn.execute(f"UPDATE alerts SET triggered = ? WHERE id IN ({placeholders})", [status_val] + ids)
         conn.commit()
         return cursor.rowcount > 0
