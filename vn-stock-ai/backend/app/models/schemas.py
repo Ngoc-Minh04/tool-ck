@@ -42,15 +42,18 @@ class Technicals(BaseModel):
 
 class AlertCreate(BaseModel):
     ticker: str
-    condition: Literal["above", "below"]
-    price: float
+    condition: str
+    price: float = 0.0
     telegram_chat_id: Optional[str] = None
     note: Optional[str] = None
+    mode: Literal["once", "daily", "continuous"] = "once"
+    cooldown: int = 15
 
 class Alert(AlertCreate):
     id: str
     created_at: datetime
     triggered: bool = False
+    last_triggered_at: Optional[datetime] = None
 
 class BacktestRequest(BaseModel):
     ticker: str

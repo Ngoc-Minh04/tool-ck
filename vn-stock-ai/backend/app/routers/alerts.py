@@ -1,46 +1,37 @@
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import AlertCreate
 from datetime import datetime
-import uuid, json
-from pathlib import Path
+import uuid
+from app.services.database import get_all_alerts, create_alert as db_create_alert, update_alert, delete_alert as db_delete_alert
 
 router = APIRouter()
-ALERTS_FILE = Path("alerts.json")
-
-def load_alerts():
-    if ALERTS_FILE.exists():
-        try:
-            return json.loads(ALERTS_FILE.read_text())
-        except:
-            return []
-    return []
-
-def save_alerts(alerts):
-    ALERTS_FILE.write_text(json.dumps(alerts, default=str, ensure_ascii=False, indent=2))
 
 @router.get("")
 def get_alerts():
-    return load_alerts()
+    return get_all_alerts()
 
 @router.post("")
 def create_alert(body: AlertCreate):
-    alerts = load_alerts()
     alert = {
         **body.model_dump(),
         "id": str(uuid.uuid4()),
         "created_at": datetime.now().isoformat(),
-        "triggered": False
+        "triggered": False,
+        "last_triggered_at": None
     }
-    alerts.append(alert)
-    save_alerts(alerts)
+    db_create_alert(alert)
     return alert
+
+@router.post("/{alert_id}/reactivate")
+def reactivate_alert(alert_id: str):
+    success = update_alert(alert_id, {"triggered": False})
+    if not success:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"reactivated": alert_id}
 
 @router.delete("/{alert_id}")
 def delete_alert(alert_id: str):
-    alerts = load_alerts()
-    original_len = len(alerts)
-    alerts = [a for a in alerts if a["id"] != alert_id]
-    if len(alerts) == original_len:
+    success = db_delete_alert(alert_id)
+    if not success:
         raise HTTPException(status_code=404, detail="Alert not found")
-    save_alerts(alerts)
     return {"deleted": alert_id}

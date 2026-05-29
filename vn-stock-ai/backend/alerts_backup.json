@@ -1,0 +1,14 @@
+[
+  {
+    "ticker": "FPT",
+    "condition": "pct_change_above",
+    "price": 5.0,
+    "telegram_chat_id": "5550643413",
+    "note": "thông báo",
+    "mode": "daily",
+    "cooldown": 15,
+    "id": "adb9d246-50b4-43f5-83b8-775360407657",
+    "created_at": "2026-05-29T11:23:45.254362",
+    "triggered": false
+  }
+]

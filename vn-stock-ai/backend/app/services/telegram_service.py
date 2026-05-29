@@ -11,17 +11,23 @@ async def send_alert(chat_id: str, message: str):
     if not target_chat:
         logger.warning("No Telegram chat ID configured")
         return False
+        
+    chat_ids = [cid.strip() for cid in str(target_chat).split(",") if cid.strip()]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    
+    overall_success = True
     async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(url, json={
-                "chat_id": target_chat,
-                "text": message,
-                "parse_mode": "HTML"
-            }, timeout=10)
-            resp.raise_for_status()
-            logger.info(f"Telegram alert sent to {target_chat}")
-            return True
-        except Exception as e:
-            logger.error(f"Telegram send error: {e}")
-            return False
+        for cid in chat_ids:
+            try:
+                resp = await client.post(url, json={
+                    "chat_id": cid,
+                    "text": message,
+                    "parse_mode": "HTML"
+                }, timeout=10)
+                resp.raise_for_status()
+                logger.info(f"Telegram alert sent to {cid}")
+            except Exception as e:
+                logger.error(f"Telegram send error to {cid}: {e}")
+                overall_success = False
+                
+    return overall_success

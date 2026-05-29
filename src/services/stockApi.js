@@ -53,6 +53,11 @@ export const stockApi = {
     await api.delete(`/alerts/${id}`);
   },
 
+  async reactivateAlert(id) {
+    const res = await api.post(`/alerts/${id}/reactivate`);
+    return res.data;
+  },
+
   async healthCheck() {
     try {
       await api.get('/health', { timeout: 10000 });
