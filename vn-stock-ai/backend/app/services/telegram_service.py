@@ -27,7 +27,10 @@ async def send_alert(chat_id: str, message: str):
                 resp.raise_for_status()
                 logger.info(f"Telegram alert sent to {cid}")
             except Exception as e:
-                logger.error(f"Telegram send error to {cid}: {e}")
+                err_detail = str(e)
+                if hasattr(e, "response") and e.response is not None:
+                    err_detail += f" | Response: {e.response.text}"
+                logger.error(f"Telegram send error to {cid}: {err_detail}")
                 overall_success = False
                 
     return overall_success
