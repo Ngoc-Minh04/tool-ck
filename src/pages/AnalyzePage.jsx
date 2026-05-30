@@ -47,6 +47,7 @@ import useAppStore from '../store/appStore';
 import WatchlistButton from '../components/Analysis/WatchlistButton';
 import useWatchlist from '../store/watchlistStore';
 import toast from 'react-hot-toast';
+import ReactMarkdown from 'react-markdown';
 import { 
   STOCK_ANALYST_SYSTEM_PROMPT, 
   buildAnalysisPrompt,
@@ -1134,6 +1135,33 @@ const CompareTable = ({ stocks }) => {
 // ===== BỘ GIẢI MÃ TÂM LÝ TIN TỨC =====
 const parseSentimentJson = (text) => {
   if (!text) return null;
+  
+  let score = 0;
+  let label = 'NEUTRAL';
+  let markdown = text;
+  
+  try {
+    // Thử tìm khối bình luận HTML ở cuối: <!-- JSON_DATA: {...} -->
+    const htmlCommentMatch = text.match(/<!--\s*JSON_DATA:\s*([\s\S]*?)\s*-->/);
+    if (htmlCommentMatch && htmlCommentMatch[1]) {
+      const parsedJson = JSON.parse(htmlCommentMatch[1].trim());
+      score = parsedJson.score ?? 0;
+      label = parsedJson.label ?? 'NEUTRAL';
+      // Xoá comment JSON khỏi markdown để hiển thị sạch sẽ
+      markdown = text.replace(htmlCommentMatch[0], '').trim();
+      return {
+        score,
+        label,
+        markdown,
+        bullets: [],
+        summary: ''
+      };
+    }
+  } catch (e) {
+    console.error("Failed to parse JSON_DATA from HTML comment:", e);
+  }
+
+  // Tương thích ngược: Thử parse JSON chuẩn (dành cho mock data hoặc các phiên cũ)
   try {
     let cleaned = text.trim();
     if (cleaned.includes('```')) {
@@ -1147,39 +1175,38 @@ const parseSentimentJson = (text) => {
     if (startIdx !== -1 && endIdx !== -1) {
       cleaned = cleaned.substring(startIdx, endIdx + 1);
     }
-    return JSON.parse(cleaned);
-  } catch (err) {
-    console.error("Failed to parse sentiment JSON:", err, text);
-    try {
-      const scoreMatch = text.match(/"score"\s*:\s*(-?\d+)/);
-      const labelMatch = text.match(/"label"\s*:\s*"([^"]+)"/);
-      const summaryMatch = text.match(/"summary"\s*:\s*"([^"]+)"/);
-      
-      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
-      const label = labelMatch ? labelMatch[1] : 'NEUTRAL';
-      const summary = summaryMatch ? summaryMatch[1] : 'Đã có lỗi phân tích tóm tắt tin tức.';
-      
-      const bullets = [];
-      const bulletRegex = /"bullets"\s*:\s*\[([\s\S]*?)\]/;
-      const bulletBlock = text.match(bulletRegex);
-      if (bulletBlock) {
-        const items = bulletBlock[1].split(',');
-        for (let item of items) {
-          item = item.trim().replace(/^"|"$/g, '').trim();
-          if (item) bullets.push(item);
-        }
-      }
+    const parsed = JSON.parse(cleaned);
+    if (parsed && (parsed.score !== undefined || parsed.label !== undefined)) {
       return {
-        score,
-        label,
-        bullets: bullets.length ? bullets : ['Không thể phân tích các luận điểm chi tiết.'],
-        summary
+        score: parsed.score ?? 0,
+        label: parsed.label ?? 'NEUTRAL',
+        bullets: parsed.bullets || [],
+        summary: parsed.summary || ''
       };
-    } catch (fallbackErr) {
-      console.error("Fallback sentiment parser failed:", fallbackErr);
     }
-    return null;
+  } catch (err) {
+    console.error("Failed to parse standard JSON, falling back to regex extraction:", err);
   }
+
+  // Trích xuất Regex cuối cùng từ text thô
+  try {
+    const scoreMatch = text.match(/"score"\s*:\s*(-?\d+)/) || text.match(/Điểm tâm lý tổng hợp:\s*(-?\d+)/i);
+    const labelMatch = text.match(/"label"\s*:\s*"([^"]+)"/) || text.match(/(BULLISH|BEARISH|NEUTRAL)/i);
+    score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
+    label = labelMatch ? labelMatch[1].toUpperCase() : 'NEUTRAL';
+    
+    return {
+      score,
+      label,
+      markdown,
+      bullets: [],
+      summary: ''
+    };
+  } catch (fallbackErr) {
+    console.error("All sentiment parsers failed:", fallbackErr);
+  }
+  
+  return null;
 };
 
 // ===== DỮ LIỆU TÂM LÝ TIN TỨC MOCK (CHẾ ĐỘ DEMO) =====
@@ -1339,41 +1366,56 @@ const SentimentAnalysisTab = ({ data, news, loading, onAnalyze, ticker }) => {
     );
   }
 
-  const { score, label, bullets, summary } = data;
+  const { score, label, bullets, summary, markdown, isCached, cachedAt } = data;
 
   return (
     <div className="space-y-5 animate-fade-in-up">
+      {/* Cảnh báo dữ liệu cũ từ bộ nhớ tạm (Cache) khi offline hoặc lỗi */}
+      {isCached && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-xs flex items-center gap-2 animate-fade-in-up">
+          <AlertCircle className="w-4 h-4 shrink-0 animate-pulse" />
+          <span>Đang hiển thị kết quả phân tích lưu trữ (lúc {cachedAt}) do mất kết nối mạng hoặc lỗi API.</span>
+        </div>
+      )}
+
       {/* Gauge Slider */}
       <SentimentGauge score={score} label={label} />
 
-      {/* AI Summary and Bullet points */}
+      {/* Báo cáo phân tích chuyên sâu của AI */}
       <div className="glass-card p-5 space-y-4">
-        <div>
-          <h4 className="text-sm font-bold text-slate-200 mb-2 flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block" />
-            Đánh giá & Luận điểm của AI
-          </h4>
-          <p className="text-xs text-slate-400 leading-relaxed italic bg-slate-950/20 p-3 rounded-lg border border-slate-800/40">
-            "{summary}"
-          </p>
-        </div>
-
-        {bullets && bullets.length > 0 && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-semibold text-slate-400">Các yếu tố ảnh hưởng chính:</h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {bullets.map((bullet, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-slate-800/30 text-xs text-slate-300 animate-fade-in-up"
-                >
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold font-mono mt-0.5">
-                    {idx + 1}
-                  </span>
-                  <span className="flex-1 leading-normal font-medium">{bullet}</span>
+        <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-3">
+          <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block animate-pulse" />
+          Báo cáo phân tích tâm lý tin tức của AI
+        </h4>
+        
+        {markdown ? (
+          <div className="markdown-content text-sm text-slate-300 leading-relaxed">
+            <ReactMarkdown>{markdown}</ReactMarkdown>
+          </div>
+        ) : (
+          /* Tương thích ngược: Hiển thị kiểu cũ khi không có markdown (Ví dụ: Mock data) */
+          <div className="space-y-4">
+            <p className="text-xs text-slate-400 leading-relaxed italic bg-slate-950/20 p-3 rounded-lg border border-slate-800/40">
+              "{summary}"
+            </p>
+            {bullets && bullets.length > 0 && (
+              <div className="space-y-2">
+                <h5 className="text-xs font-semibold text-slate-400">Các yếu tố ảnh hưởng chính:</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {bullets.map((bullet, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-slate-800/30 text-xs text-slate-300 animate-fade-in-up"
+                    >
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold font-mono mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span className="flex-1 leading-normal font-medium">{bullet}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1772,6 +1814,37 @@ const AnalyzePage = () => {
     
     setSentimentLoading(true);
     
+    // Kiểm tra mất mạng ngoại tuyến
+    if (!navigator.onLine) {
+      // Offline fallback: Tìm trong lịch sử lưu trữ
+      const historyList = useAppStore.getState().history || [];
+      const existingHistory = historyList.find(
+        (h) => (h.ticker || '').toUpperCase() === (currentParams.ticker || '').toUpperCase()
+      );
+      
+      if (existingHistory && existingHistory.sentimentData) {
+        setSentimentData({
+          ...existingHistory.sentimentData,
+          isCached: true,
+          cachedAt: existingHistory.timestamp 
+            ? new Date(existingHistory.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(existingHistory.timestamp).toLocaleDateString('vi-VN')
+            : 'gần nhất'
+        });
+        toast('Đang ngoại tuyến. Đã tải phân tích tâm lý từ lịch sử.', { icon: '⚠️' });
+        setSentimentLoading(false);
+      } else {
+        setSentimentData({
+          score: 0,
+          label: 'NEUTRAL',
+          bullets: [],
+          summary: 'Không có kết nối mạng và không tìm thấy dữ liệu phân tích lịch sử của mã này. Vui lòng kết nối Internet để thử lại.'
+        });
+        toast.error("Ngoại tuyến và không có dữ liệu lịch sử!");
+        setSentimentLoading(false);
+      }
+      return;
+    }
+    
     if (!hasKey) {
       // Chế độ mô phỏng khi chưa nhập API key
       setTimeout(() => {
@@ -1784,7 +1857,13 @@ const AnalyzePage = () => {
     
     try {
       const newsList = stock1.news || [];
-      const prompt = buildSentimentPrompt(currentParams.ticker, newsList);
+      const prompt = buildSentimentPrompt({
+        ticker: currentParams.ticker,
+        exchange: currentParams.exchange || 'HOSE',
+        info: stock1.info,
+        technicals: stock1.technicals,
+        newsList
+      });
       
       const aiResult = await analyze({
         systemPrompt: STOCK_SENTIMENT_SYSTEM_PROMPT,
@@ -1795,35 +1874,66 @@ const AnalyzePage = () => {
         const parsed = parseSentimentJson(aiResult);
         if (parsed) {
           setSentimentData(parsed);
+          
+          // Cập nhật lại lịch sử
+          const state = useAppStore.getState();
+          const currentActive = state.activeAnalysis;
+          if (currentActive.currentParams) {
+            addToHistory({
+              ticker: currentActive.currentParams.ticker,
+              exchange: currentActive.currentParams.exchange,
+              timeframe: currentActive.currentParams.timeframe,
+              result: currentActive.result,
+              stockInfo: currentActive.stock1Data.info || stock1.info,
+              signal: currentActive.result?.toUpperCase().includes('MUA') || currentActive.result?.toUpperCase().includes('BUY') ? 'BUY' : currentActive.result?.toUpperCase().includes('BÁN') || currentActive.result?.toUpperCase().includes('SELL') ? 'SELL' : 'HOLD',
+              ohlcv: currentActive.stock1Data.ohlcv || stock1.ohlcv,
+              technicals: currentActive.stock1Data.technicals || stock1.technicals,
+              sr: currentActive.stock1Data.sr || stock1.sr,
+              news: currentActive.stock1Data.news || stock1.news,
+              quarterlyData: currentActive.quarterlyData,
+              sentimentData: parsed,
+              predictionData: currentActive.predictionData,
+              backtestResult: currentActive.backtestResult
+            });
+          }
+          toast.success("Đã phân tích tâm lý tin tức thành công!");
         } else {
-          setSentimentData({
-            score: 0,
-            label: 'NEUTRAL',
-            bullets: ['Không thể phân tích dữ liệu tin tức thành định dạng chuẩn.'],
-            summary: 'Đã xảy ra lỗi khi chuyển đổi kết quả phân tích AI thành cấu trúc dữ liệu.'
-          });
+          throw new Error("Không thể bóc tách dữ liệu AI trả về.");
         }
+      } else {
+        throw new Error("Không nhận được phản hồi từ AI.");
+      }
+    } catch (err) {
+      console.error("Error analyzing news sentiment, falling back to cache:", err);
+      
+      // Fallback khi API bị lỗi (ví dụ: Rate Limit 429)
+      const historyList = useAppStore.getState().history || [];
+      const existingHistory = historyList.find(
+        (h) => (h.ticker || '').toUpperCase() === (currentParams.ticker || '').toUpperCase()
+      );
+      
+      if (existingHistory && existingHistory.sentimentData) {
+        setSentimentData({
+          ...existingHistory.sentimentData,
+          isCached: true,
+          cachedAt: existingHistory.timestamp 
+            ? new Date(existingHistory.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(existingHistory.timestamp).toLocaleDateString('vi-VN')
+            : 'gần nhất'
+        });
+        toast('Lỗi API. Đã tải phân tích tâm lý từ lịch sử.', { icon: 'ℹ️' });
       } else {
         setSentimentData({
           score: 0,
           label: 'NEUTRAL',
-          bullets: ['Lỗi cuộc gọi AI (Không nhận được phản hồi từ mô hình).'],
-          summary: 'Không nhận được kết quả phân tích tâm lý từ AI (vượt giới hạn cuộc gọi hoặc lỗi API).'
+          bullets: [],
+          summary: `Không thể phân tích tâm lý tin tức do lỗi kết nối hoặc vượt quá giới hạn lượt gọi AI. Vui lòng kiểm tra lại sau.`
         });
+        toast.error("Lỗi cuộc gọi AI và không có dữ liệu lịch sử!");
       }
-    } catch (err) {
-      console.error("Error analyzing news sentiment:", err);
-      toast.error("Lỗi phân tích tâm lý tin tức!");
-      setSentimentData({
-        score: 0,
-        label: 'NEUTRAL',
-        bullets: ['Lỗi kết nối hoặc giới hạn API.'],
-        summary: 'Không thể phân tích tâm lý tin tức do lỗi cuộc gọi AI.'
-      });
     } finally {
       setSentimentLoading(false);
     }
-  }, [currentParams?.ticker, stock1.news, analyze, sentimentLoading, hasKey]);
+  }, [currentParams, stock1, analyze, sentimentLoading, hasKey, addToHistory, setSentimentData]);
 
   // Tự động trigger phân tích tâm lý khi chuyển sang tab 'sentiment'
   useEffect(() => {
