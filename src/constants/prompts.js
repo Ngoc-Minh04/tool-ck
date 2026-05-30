@@ -337,3 +337,77 @@ ${newsText}
 Hãy thực hiện phân tích theo yêu cầu trong System Prompt.`;
 };
 
+// ===== SYSTEM PROMPT - PHÂN TÍCH THỬ NGHIỆM CHIẾN THUẬT (BACKTEST) =====
+export const STOCK_BACKTEST_SYSTEM_PROMPT = `Bạn là chuyên gia tối ưu hóa chiến lược giao dịch và quản lý rủi ro chứng khoán hàng đầu Việt Nam.
+
+Nhiệm vụ của bạn là phân tích kết quả thử nghiệm lịch sử (Backtest) của một mã cổ phiếu theo một chiến lược cụ thể, đánh giá hiệu suất và đưa ra báo cáo nhận xét chi tiết bằng tiếng Việt.
+
+YÊU CẦU ĐỊNH DẠNG BÁO CÁO (Bắt buộc trả về đúng cấu trúc Markdown bên dưới):
+
+### 📊 ĐÁNH GIÁ HIỆU SUẤT CHIẾN LƯỢC
+- Nhận xét tổng quan về lợi nhuận chiến lược ({STRATEGY_RETURN}%) so với phương pháp Buy & Hold ({BH_RETURN}%). Chiến lược này có thực sự tạo ra tỷ suất sinh lời vượt trội (Alpha) không?
+- Phân tích mối tương quan giữa Tỷ lệ thắng (Win Rate) và Hệ số lợi nhuận (Profit Factor). Mức sụt giảm tài sản lớn nhất (Max Drawdown: {MAX_DRAWDOWN}%) có nằm trong ngưỡng an toàn chấp nhận được của nhà đầu tư không?
+
+### 🔍 PHÂN TÍCH NHẬT KÝ GIAO DỊCH CHÌA KHÓA
+- Đánh giá lệnh thắng lớn nhất và lệnh thua đậm nhất dựa trên Nhật ký giao dịch được cung cấp. Phân tích nguyên nhân kỹ thuật dẫn đến sự thành công hoặc thất bại của các lệnh này (Ví dụ: dính bẫy bulltrap, bán non trước sóng tăng...).
+
+### ⚙️ KHUYẾN NGHỊ TỐI ƯU HÓA THAM SỐ
+Đề xuất các biến thể tối ưu hơn cho chiến lược hiện tại phù hợp với đặc tính biến động của cổ phiếu này:
+| Tham số đề xuất | Lý do thay đổi tham số | Mục tiêu cải thiện (Win Rate / Drawdown) |
+|:---|:---|:---|
+| Biến thể 1 | | |
+| Biến thể 2 | | |
+
+### 💡 BÀI HỌC KINH NGHIỆM & QUẢN TRỊ RỦI RO
+- **Điều kiện thị trường lý tưởng**: Chiến lược này hoạt động tốt nhất trong giai đoạn thị trường nào (Uptrend mạnh, Downtrend, hay Sideway tích lũy)?
+- **Điểm yếu cốt lõi**: Nêu rõ rủi ro lớn nhất của chiến lược (Ví dụ: chiến lược MA dễ bị nhiễu và dính lệnh giả liên tục khi thị trường đi ngang không xu hướng).
+- **Cải tiến kết hợp chỉ báo**: Đề xuất thêm 1-2 chỉ báo kỹ thuật khác để lọc tín hiệu nhiễu cho chiến lược này (Ví dụ: dùng ADX để xác định sức mạnh xu hướng trước khi dùng MA Crossover).
+
+---
+*Lưu ý: Báo cáo phân tích hành vi lịch sử phục vụ mục đích nghiên cứu chiến thuật, không cấu thành lời khuyên đầu tư trực tiếp.*`;
+
+export const buildBacktestPrompt = ({
+  ticker,
+  strategy,
+  startDate,
+  endDate,
+  totalBars,
+  capital,
+  totalTrades,
+  winTrades,
+  lossTrades,
+  winRate,
+  strategyReturn,
+  bhReturn,
+  avgReturnPerTrade,
+  profitFactor,
+  maxDrawdown,
+  sharpeRatio,
+  avgHoldingPeriod,
+  tradeLog
+}) => {
+  return `Phân tích kết quả thử nghiệm lịch sử (Backtest) của cổ phiếu ${ticker.toUpperCase()} theo chiến lược ${strategy}.
+
+DỮ LIỆU ĐẦU VÀO VÀ THIẾT LẬP:
+- Khoảng thời gian: ${startDate} đến ${endDate} (${totalBars} phiên giao dịch)
+- Chiến lược áp dụng: ${strategy}
+- Vốn ban đầu: ${capital.toLocaleString('vi-VN')} VND | Phí mua: 0.15% | Phí bán & Thuế: 0.25%
+- Quy tắc giao dịch: Tuân thủ quy định T+2.5 Việt Nam (bán từ T+3), mua/bán 100% vốn quy mô mỗi vị thế.
+
+DỮ LIỆU KẾT QUẢ GIAO DỊCH THỰC TẾ (Do hệ thống tính toán chính xác):
+- Tổng số lệnh thực hiện: ${totalTrades} lệnh
+- Số lệnh thắng / thua: ${winTrades} / ${lossTrades} (Win Rate: ${winRate}%)
+- Tổng lợi nhuận chiến lược: ${strategyReturn}%
+- Lợi nhuận chiến lược Buy & Hold (Mua và Nắm giữ): ${bhReturn}%
+- Lợi nhuận trung bình mỗi lệnh: ${avgReturnPerTrade}%
+- Hệ số lợi nhuận (Profit Factor): ${profitFactor}
+- Mức sụt giảm tài sản lớn nhất (Max Drawdown): ${maxDrawdown}%
+- Chỉ số Sharpe Ratio: ${sharpeRatio}
+- Thời gian nắm giữ trung bình: ${avgHoldingPeriod} phiên
+
+NHẬT KÝ CHI TIẾT CÁC LỆNH GIAO DỊCH:
+${tradeLog}
+
+Hãy thực hiện phân tích theo yêu cầu trong System Prompt.`;
+};
+

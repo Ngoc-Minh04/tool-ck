@@ -52,7 +52,9 @@ import {
   STOCK_ANALYST_SYSTEM_PROMPT, 
   buildAnalysisPrompt,
   STOCK_SENTIMENT_SYSTEM_PROMPT,
-  buildSentimentPrompt
+  buildSentimentPrompt,
+  STOCK_BACKTEST_SYSTEM_PROMPT,
+  buildBacktestPrompt
 } from '../constants/prompts';
 import { stockApi } from '../services/stockApi';
 
@@ -454,6 +456,58 @@ const CustomBacktestTooltip = ({ active, payload }) => {
   return null;
 };
 
+// ===== HELPERS FOR BACKTEST AI ANALYSIS =====
+const computeExtraMetrics = (trades, ohlcv) => {
+  const buyTrades = trades.filter(t => t.type === 'buy');
+  const sellTrades = trades.filter(t => t.type === 'sell');
+  
+  // Average return per trade (%)
+  let avgReturnPerTrade = 0;
+  if (sellTrades.length > 0) {
+    const returns = sellTrades.map(t => {
+      const entryCost = t.price * t.shares - t.commission - t.pnl;
+      return entryCost > 0 ? (t.pnl / entryCost) * 100 : 0;
+    });
+    avgReturnPerTrade = (returns.reduce((sum, r) => sum + r, 0) / sellTrades.length).toFixed(2);
+  }
+
+  // Profit Factor
+  const grossProfit = sellTrades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+  const grossLoss = Math.abs(sellTrades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+  const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : grossProfit > 0 ? 'Infinity' : 'N/A';
+
+  // Average holding period (sessions)
+  let avgHoldingPeriod = 'N/A';
+  if (sellTrades.length > 0 && ohlcv && ohlcv.length > 0) {
+    const ohlcvDates = ohlcv.map(x => x.date.slice(0, 10));
+    const periods = sellTrades.map((t, idx) => {
+      const buy = buyTrades[idx];
+      if (!buy) return 0;
+      const buyIdx = ohlcvDates.indexOf(buy.date.slice(0, 10));
+      const sellIdx = ohlcvDates.indexOf(t.date.slice(0, 10));
+      return buyIdx !== -1 && sellIdx !== -1 ? Math.max(1, sellIdx - buyIdx) : 0;
+    }).filter(p => p > 0);
+    
+    if (periods.length > 0) {
+      avgHoldingPeriod = (periods.reduce((sum, p) => sum + p, 0) / periods.length).toFixed(1);
+    }
+  }
+
+  return { avgReturnPerTrade, profitFactor, avgHoldingPeriod };
+};
+
+const formatTradeLog = (trades) => {
+  if (!trades || trades.length === 0) return 'Không có giao dịch nào được thực hiện.';
+  return trades.slice(-10).map((t, idx) => {
+    const dateFormatted = t.date.split('-').reverse().join('/');
+    if (t.type === 'buy') {
+      return `[Lệnh MUA] ngày ${dateFormatted} - Giá: ${t.price.toLocaleString('vi-VN')} VND - Số lượng: ${t.shares.toLocaleString('vi-VN')} - Phí: ${t.commission.toLocaleString('vi-VN')} VND`;
+    } else {
+      return `[Lệnh BÁN] ngày ${dateFormatted} - Giá: ${t.price.toLocaleString('vi-VN')} VND - Số lượng: ${t.shares.toLocaleString('vi-VN')} - Lãi/Lỗ: ${t.pnl >= 0 ? '+' : ''}${t.pnl.toLocaleString('vi-VN')} VND - Phí: ${t.commission.toLocaleString('vi-VN')} VND`;
+    }
+  }).join('\n');
+};
+
 // ===== TAB THỬ NGHIỆM CHIẾN THUẬT (BACKTEST) =====
 const BacktestTab = ({ ticker }) => {
   const [strategy, setStrategy] = useState('ma_cross');
@@ -461,8 +515,19 @@ const BacktestTab = ({ ticker }) => {
   const [initialCapital, setInitialCapital] = useState(100000000);
   const backtestResult = useAppStore(s => s.activeAnalysis.backtestResult);
   const updateActiveAnalysis = useAppStore(s => s.updateActiveAnalysis);
+  const addToHistory = useAppStore(s => s.addToHistory);
+  const settings = useAppStore(s => s.settings);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // AI states
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const { analyze } = useClaude();
+
+  const hasKey = (settings.apiKey && !settings.apiKey.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && settings.apiKey.trim() !== '' && settings.apiKey !== 'sk-ant-api03-' && settings.apiKey !== 'your_key_here') ||
+    (import.meta.env.VITE_ANTHROPIC_API_KEY && !import.meta.env.VITE_ANTHROPIC_API_KEY.includes('DÁN_KEY_CỦA_BẠN_VÀO_ĐÂY') && import.meta.env.VITE_ANTHROPIC_API_KEY.trim() !== '' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'sk-ant-api03-' && import.meta.env.VITE_ANTHROPIC_API_KEY !== 'your_key_here');
 
   const result = (backtestResult &&
                   backtestResult.ticker === ticker &&
@@ -470,6 +535,14 @@ const BacktestTab = ({ ticker }) => {
                   backtestResult.period === period &&
                   backtestResult.initialCapital === initialCapital)
     ? backtestResult.data
+    : null;
+
+  const aiAnalysis = (backtestResult &&
+                      backtestResult.ticker === ticker &&
+                      backtestResult.strategy === strategy &&
+                      backtestResult.period === period &&
+                      backtestResult.initialCapital === initialCapital)
+    ? backtestResult.aiAnalysis
     : null;
 
   const formatCapital = (val) => {
@@ -482,15 +555,94 @@ const BacktestTab = ({ ticker }) => {
     return clean ? parseInt(clean, 10) : 0;
   };
 
+  const STRATEGY_INFO = {
+    ma_cross: { name: 'MA20/50 Cross', desc: 'Mua khi MA20 cắt lên MA50, bán khi cắt xuống. Hiệu quả trong xu hướng mạnh, kém hiệu quả khi thị trường đi ngang.', best: 'Xu hướng rõ ràng (Bull/Bear market)', worst: 'Thị trường sideway (nhiều tín hiệu giả)' },
+    rsi: { name: 'RSI Bounce', desc: 'Mua khi RSI < 30 (quá bán), bán khi RSI > 70 (quá mua). Phù hợp mua đáy, nhưng đôi khi cổ phiếu vẫn tiếp tục giảm sau khi chạm RSI 30.', best: 'Thị trường dao động không xu hướng', worst: 'Xu hướng giảm dài hạn (downtrend)' },
+    macd: { name: 'MACD Histogram', desc: 'Mua khi MACD Hist > 0 (đà tăng), bán khi < 0 (đà giảm). Nhạy với biến động ngắn hạn, tạo nhiều tín hiệu giao dịch.', best: 'Xu hướng trung hạn có đà mạnh', worst: 'Thị trường biến động mạnh, nhiễu cao' },
+    ma200: { name: 'MA200 Trend', desc: 'Mua khi giá trên MA200, bán khi dưới MA200. Chiến thuật theo xu hướng dài hạn, ít giao dịch nhưng cần vốn lớn và thời gian nắm giữ lâu.', best: 'Xu hướng tăng dài hạn (cần 1–2 năm)', worst: 'Thị trường ngắn hạn dưới 6 tháng' },
+    bb_reversion: { name: 'Bollinger Bands', desc: 'Mua khi giá chạm dải dưới BB (quá bán), bán khi chạm dải trên (quá mua). Chiến thuật hồi phục về trung bình.', best: 'Thị trường sideway, dao động trong vùng', worst: 'Xu hướng tăng/giảm mạnh kéo dài' },
+  };
+
+  const syncBacktestToHistory = (btResult) => {
+    const state = useAppStore.getState();
+    const currentActive = state.activeAnalysis;
+    const tickerToUse = ticker || currentActive.currentParams?.ticker;
+    if (!tickerToUse) return;
+
+    const savedHistory = state.history || [];
+    const existing = savedHistory.find(
+      (h) => h.ticker.toUpperCase() === tickerToUse.toUpperCase()
+    );
+
+    if (existing) {
+      addToHistory({
+        ...existing,
+        backtestResult: btResult
+      });
+    } else {
+      addToHistory({
+        ticker: tickerToUse,
+        exchange: currentActive.currentParams?.exchange || 'HOSE',
+        timeframe: currentActive.currentParams?.timeframe || 'T3',
+        result: currentActive.result,
+        stockInfo: currentActive.stock1Data.info,
+        signal: 'HOLD',
+        ohlcv: currentActive.stock1Data.ohlcv,
+        technicals: currentActive.stock1Data.technicals,
+        sr: currentActive.stock1Data.sr,
+        news: currentActive.stock1Data.news,
+        quarterlyData: currentActive.quarterlyData,
+        sentimentData: currentActive.sentimentData,
+        predictionData: currentActive.predictionData,
+        backtestResult: btResult
+      });
+    }
+  };
+
   const handleRunBacktest = () => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
-    updateActiveAnalysis({ backtestResult: null });
+    setAiError(null);
 
     const parsedCapital = typeof initialCapital === 'number'
       ? initialCapital
       : (parseInt(initialCapital.toString().replace(/\D/g, ''), 10) || 100000000);
+
+    // 1. Kiểm tra trạng thái offline ngoại tuyến trước
+    if (!navigator.onLine) {
+      const historyList = useAppStore.getState().history || [];
+      const matchedHistory = historyList.find(
+        (h) => (h.ticker || '').toUpperCase() === ticker.toUpperCase() &&
+               h.backtestResult &&
+               h.backtestResult.strategy === strategy &&
+               h.backtestResult.period === period &&
+               h.backtestResult.initialCapital === parsedCapital
+      );
+
+      if (matchedHistory && matchedHistory.backtestResult) {
+        updateActiveAnalysis({
+          backtestResult: {
+            ...matchedHistory.backtestResult,
+            isCached: true,
+            cachedAt: matchedHistory.timestamp
+              ? new Date(matchedHistory.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(matchedHistory.timestamp).toLocaleDateString('vi-VN')
+              : 'gần nhất'
+          }
+        });
+        toast('Đang ngoại tuyến. Đã khôi phục kết quả thử nghiệm từ lịch sử.', { icon: '⚠️' });
+        setLoading(false);
+      } else {
+        updateActiveAnalysis({ backtestResult: null });
+        setError('Không có kết nối mạng và không tìm thấy kết quả thử nghiệm lịch sử cho cấu hình này. Vui lòng kết nối Internet để chạy thử nghiệm mới.');
+        toast.error("Ngoại tuyến và không có dữ liệu lịch sử!");
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Xóa kết quả cũ
+    updateActiveAnalysis({ backtestResult: null });
 
     stockApi.runBacktest({
       ticker,
@@ -498,17 +650,71 @@ const BacktestTab = ({ ticker }) => {
       period,
       initial_capital: parsedCapital
     })
-      .then(res => {
+      .then(async (res) => {
         if (res.total_trades !== undefined) {
-          updateActiveAnalysis({
-            backtestResult: {
-              ticker,
-              strategy,
-              period,
-              initialCapital: parsedCapital,
-              data: res
+          const initialResult = {
+            ticker,
+            strategy,
+            period,
+            initialCapital: parsedCapital,
+            data: res,
+            aiAnalysis: null
+          };
+          updateActiveAnalysis({ backtestResult: initialResult });
+
+          // Gọi AI Phân Tích
+          if (hasKey) {
+            setAiLoading(true);
+            setAiError(null);
+            try {
+              const ohlcv = useAppStore.getState().activeAnalysis.stock1Data.ohlcv || [];
+              const { avgReturnPerTrade, profitFactor, avgHoldingPeriod } = computeExtraMetrics(res.trades || [], ohlcv);
+              const tradeLog = formatTradeLog(res.trades || []);
+              
+              const prompt = buildBacktestPrompt({
+                ticker,
+                strategy: STRATEGY_INFO[strategy]?.name || strategy,
+                startDate: res.equity_curve && res.equity_curve.length > 0 ? res.equity_curve[0].date : 'N/A',
+                endDate: res.equity_curve && res.equity_curve.length > 0 ? res.equity_curve[res.equity_curve.length - 1].date : 'N/A',
+                totalBars: ohlcv.length || res.equity_curve?.length || 0,
+                capital: parsedCapital,
+                totalTrades: res.total_trades,
+                winTrades: (res.trades || []).filter(t => t.type === 'sell' && t.pnl > 0).length,
+                lossTrades: (res.trades || []).filter(t => t.type === 'sell' && t.pnl <= 0).length,
+                winRate: res.win_rate,
+                strategyReturn: res.total_return,
+                bhReturn: res.benchmark_return,
+                avgReturnPerTrade,
+                profitFactor,
+                maxDrawdown: res.max_drawdown,
+                sharpeRatio: res.sharpe_ratio,
+                avgHoldingPeriod,
+                tradeLog
+              });
+
+              const aiResult = await analyze({
+                systemPrompt: STOCK_BACKTEST_SYSTEM_PROMPT,
+                userPrompt: prompt,
+              });
+
+              if (aiResult) {
+                const finalResult = {
+                  ...initialResult,
+                  aiAnalysis: aiResult
+                };
+                updateActiveAnalysis({ backtestResult: finalResult });
+                syncBacktestToHistory(finalResult);
+                toast.success("Đã hoàn thành báo cáo phân tích thử nghiệm từ AI!");
+              } else {
+                setAiError("Không nhận được phản hồi phân tích từ AI.");
+              }
+            } catch (err) {
+              console.error("AI Backtest analysis failed:", err);
+              setAiError("Đã xảy ra lỗi khi gọi AI phân tích thử nghiệm.");
+            } finally {
+              setAiLoading(false);
             }
-          });
+          }
         } else {
           setError('Không có kết quả kiểm thử nào được trả về.');
         }
@@ -535,13 +741,6 @@ const BacktestTab = ({ ticker }) => {
     }
   }, [ticker]);
 
-  const STRATEGY_INFO = {
-    ma_cross: { name: 'MA20/50 Cross', desc: 'Mua khi MA20 cắt lên MA50, bán khi cắt xuống. Hiệu quả trong xu hướng mạnh, kém hiệu quả khi thị trường đi ngang.', best: 'Xu hướng rõ ràng (Bull/Bear market)', worst: 'Thị trường sideway (nhiều tín hiệu giả)' },
-    rsi: { name: 'RSI Bounce', desc: 'Mua khi RSI < 30 (quá bán), bán khi RSI > 70 (quá mua). Phù hợp mua đáy, nhưng đôi khi cổ phiếu vẫn tiếp tục giảm sau khi chạm RSI 30.', best: 'Thị trường dao động không xu hướng', worst: 'Xu hướng giảm dài hạn (downtrend)' },
-    macd: { name: 'MACD Histogram', desc: 'Mua khi MACD Hist > 0 (đà tăng), bán khi < 0 (đà giảm). Nhạy với biến động ngắn hạn, tạo nhiều tín hiệu giao dịch.', best: 'Xu hướng trung hạn có đà mạnh', worst: 'Thị trường biến động mạnh, nhiễu cao' },
-    ma200: { name: 'MA200 Trend', desc: 'Mua khi giá trên MA200, bán khi dưới MA200. Chiến thuật theo xu hướng dài hạn, ít giao dịch nhưng cần vốn lớn và thời gian nắm giữ lâu.', best: 'Xu hướng tăng dài hạn (cần 1–2 năm)', worst: 'Thị trường ngắn hạn dưới 6 tháng' },
-    bb_reversion: { name: 'Bollinger Bands', desc: 'Mua khi giá chạm dải dưới BB (quá bán), bán khi chạm dải trên (quá mua). Chiến thuật hồi phục về trung bình.', best: 'Thị trường sideway, dao động trong vùng', worst: 'Xu hướng tăng/giảm mạnh kéo dài' },
-  };
   const stratInfo = STRATEGY_INFO[strategy] || {};
 
   return (
@@ -662,6 +861,14 @@ const BacktestTab = ({ ticker }) => {
         const beats = alpha >= 0;
         return (
           <div className="space-y-4">
+            {/* Offline cache warning */}
+            {backtestResult?.isCached && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0 text-amber-400 animate-pulse" />
+                <span>Đang hiển thị kết quả thử nghiệm lưu trong bộ nhớ đệm (Offline) lúc {backtestResult.cachedAt}. Kết nối mạng để chạy lại.</span>
+              </div>
+            )}
+
             {/* Alpha Verdict Banner */}
             <div className={`p-3 rounded-2xl flex items-center gap-3 border ${beats ? 'bg-emerald-500/8 border-emerald-500/25 text-emerald-300' : 'bg-rose-500/8 border-rose-500/25 text-rose-300'}`}>
               <div className={`p-2 rounded-xl ${beats ? 'bg-emerald-500/15' : 'bg-rose-500/15'}`}>
@@ -873,6 +1080,52 @@ const BacktestTab = ({ ticker }) => {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            )}
+
+            {/* AI Analysis Report */}
+            {aiLoading && (
+              <div className="glass-card p-5 space-y-4 border border-slate-800/40 bg-slate-900/10 animate-pulse">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-cyan-500/20 animate-spin border-2 border-cyan-400 border-t-transparent" />
+                  <div className="h-4 w-48 bg-slate-800 rounded-md"></div>
+                </div>
+                <div className="space-y-2 mt-4">
+                  <div className="h-3 w-full bg-slate-800 rounded-md"></div>
+                  <div className="h-3 w-5/6 bg-slate-800 rounded-md"></div>
+                  <div className="h-3 w-4/5 bg-slate-800 rounded-md"></div>
+                </div>
+                <div className="h-px bg-slate-800/50 my-4" />
+                <div className="space-y-2">
+                  <div className="h-3 w-full bg-slate-800 rounded-md"></div>
+                  <div className="h-3 w-11/12 bg-slate-800 rounded-md"></div>
+                </div>
+              </div>
+            )}
+
+            {aiError && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                <AlertCircle size={14} className="text-amber-400 shrink-0" />
+                <span>{aiError}</span>
+              </div>
+            )}
+
+            {aiAnalysis && !aiLoading && (
+              <div className="glass-card p-5 space-y-4 border border-slate-800/40 bg-slate-900/10">
+                <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-3">
+                  <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block animate-pulse" />
+                  AI Nhận xét &amp; Đề xuất Cải tiến
+                </h4>
+                <div className="markdown-content text-sm text-slate-300 leading-relaxed">
+                  <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+
+            {!hasKey && !aiLoading && !aiAnalysis && (
+              <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/60 text-slate-400 text-xs flex items-center gap-2">
+                <Info size={14} className="text-slate-400 shrink-0" />
+                <span>Vui lòng cấu hình API Key trong mục Cài đặt để nhận phân tích chi tiết từ AI cho kết quả thử nghiệm này.</span>
               </div>
             )}
 
