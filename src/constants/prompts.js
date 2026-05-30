@@ -345,11 +345,11 @@ Nhiệm vụ của bạn là phân tích kết quả thử nghiệm lịch sử 
 YÊU CẦU ĐỊNH DẠNG BÁO CÁO (Bắt buộc trả về đúng cấu trúc Markdown bên dưới):
 
 ### 📊 ĐÁNH GIÁ HIỆU SUẤT CHIẾN LƯỢC
-- Nhận xét tổng quan về lợi nhuận chiến lược ({STRATEGY_RETURN}%) so với phương pháp Buy & Hold ({BH_RETURN}%). Chiến lược này có thực sự tạo ra tỷ suất sinh lời vượt trội (Alpha) không?
-- Phân tích mối tương quan giữa Tỷ lệ thắng (Win Rate) và Hệ số lợi nhuận (Profit Factor). Mức sụt giảm tài sản lớn nhất (Max Drawdown: {MAX_DRAWDOWN}%) có nằm trong ngưỡng an toàn chấp nhận được của nhà đầu tư không?
+- Nhận xét tổng quan về lợi nhuận chiến lược thực tế so với phương pháp Buy & Hold. Chiến lược này có thực sự tạo ra tỷ suất sinh lời vượt trội (Alpha) không? (Sử dụng số liệu thực tế được cung cấp ở phần đầu vào).
+- Phân tích mối tương quan giữa Tỷ lệ thắng (Win Rate) và Hệ số lợi nhuận (Profit Factor). Mức sụt giảm tài sản lớn nhất (Max Drawdown) có nằm trong ngưỡng an toàn chấp nhận được của nhà đầu tư không?
 
 ### 🔍 PHÂN TÍCH NHẬT KÝ GIAO DỊCH CHÌA KHÓA
-- Đánh giá lệnh thắng lớn nhất và lệnh thua đậm nhất dựa trên Nhật ký giao dịch được cung cấp. Phân tích nguyên nhân kỹ thuật dẫn đến sự thành công hoặc thất bại của các lệnh này (Ví dụ: dính bẫy bulltrap, bán non trước sóng tăng...).
+- Đánh giá lệnh thắng lớn nhất và lệnh thua đậm nhất dựa trên Nhật ký giao dịch được cung cấp. Phân tích nguyên nhân kỹ thuật dẫn đến sự thành công hoặc thất bại của các lệnh này (Ví dụ: dính bẫy bulltrap, bán non trước sóng tăng...). Nếu không có lệnh nào được thực hiện hoặc số lượng lệnh quá ít, hãy nhận định rõ lý do chỉ báo kỹ thuật của chiến lược chưa được thỏa mãn.
 
 ### ⚙️ KHUYẾN NGHỊ TỐI ƯU HÓA THAM SỐ
 Đề xuất các biến thể tối ưu hơn cho chiến lược hiện tại phù hợp với đặc tính biến động của cổ phiếu này:
