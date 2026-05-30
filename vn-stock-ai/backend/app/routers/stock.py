@@ -96,7 +96,22 @@ async def full_analysis(ticker: str = Query(...), period: str = "3mo"):
     ohlcv_data = get_ohlcv(ticker, period)
     info_data = get_stock_info(ticker)
     tech = compute_indicators(ohlcv_data)
-    result = {"ohlcv": ohlcv_data, "info": info_data, "technicals": tech}
+    
+    # Lấy thông tin chỉ số VNINDEX từ tổng quan thị trường
+    vnindex_data = None
+    try:
+        from app.services.vnstock_service import get_market_overview
+        indices = get_market_overview()
+        vnindex_data = next((idx for idx in indices if idx.get("index") == "VNINDEX"), None)
+    except Exception as e:
+        logger.warning(f"Failed to fetch VNINDEX for full analysis of {ticker}: {e}")
+
+    result = {
+        "ohlcv": ohlcv_data, 
+        "info": info_data, 
+        "technicals": tech,
+        "vnindex": vnindex_data
+    }
     await cache_set(key, result, ttl=get_stock_cache_ttl(trading_ttl=120))
     return result
 

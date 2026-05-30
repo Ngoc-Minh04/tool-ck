@@ -148,6 +148,7 @@ export function useStockData(storeKey) {
             marketCap: fullData.info?.market_cap,
           },
           foreignNet: fullData.info?.foreign_net || 0,
+          vnindex: fullData.vnindex || null,
         };
 
         updateStockData({

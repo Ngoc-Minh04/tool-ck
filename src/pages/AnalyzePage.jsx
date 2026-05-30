@@ -1611,9 +1611,23 @@ const AnalyzePage = () => {
     setSentimentData(null); // Reset dữ liệu tâm lý khi đổi mã phân tích chính
     updateActiveAnalysis({ predictionData: null, backtestResult: null });
 
-    const [liveData] = await Promise.all([
+    const currentSentimentScore = useAppStore.getState().activeAnalysis.sentimentData?.score || null;
+
+    // Gọi song song: Dữ liệu stock thô + Dữ liệu dự báo học máy (10 phiên)
+    const [liveData, predData] = await Promise.all([
       stock1.fetchAll(ticker, chartPeriod),
+      stockApi.getPredict(ticker, 10, currentSentimentScore).catch(err => {
+        console.error("Ensemble forecast failed in AI analyze:", err);
+        return null;
+      })
     ]);
+
+    // Cập nhật predictionData vào store ngay lập tức để đồng bộ tab "Dự báo AI"
+    if (predData) {
+      updateActiveAnalysis({
+        predictionData: { ticker, periods: 10, data: predData }
+      });
+    }
 
     // Fetch quarterly tài chính song song (không block AI)
     let fetchedQuarterlyData = null;
@@ -1626,14 +1640,18 @@ const AnalyzePage = () => {
         setQuarterlyData(null);
       });
 
+    const currentStock1Data = useAppStore.getState().activeAnalysis.stock1Data;
     const prompt = buildAnalysisPrompt({
       ticker,
       exchange,
       timeframe,
       sources,
       info: liveData?.info,
-      technicals: liveData?.technicals
+      technicals: liveData?.technicals,
+      prediction: predData,
+      sr: currentStock1Data?.sr
     });
+
     const aiResult = await analyze({
       systemPrompt: STOCK_ANALYST_SYSTEM_PROMPT,
       userPrompt: prompt,
@@ -1653,22 +1671,22 @@ const AnalyzePage = () => {
 
       await quarterlyPromise; // ensure quarterlyData fetch finished
       const state = useAppStore.getState();
-      const currentStock1Data = state.activeAnalysis.stock1Data;
+      const updatedStock1Data = state.activeAnalysis.stock1Data;
 
       addToHistory({
         ticker,
         exchange,
         timeframe,
         result: aiResult,
-        stockInfo: currentStock1Data.info || liveData?.info || null,
+        stockInfo: updatedStock1Data.info || liveData?.info || null,
         signal,
-        ohlcv: currentStock1Data.ohlcv || [],
-        technicals: currentStock1Data.technicals || liveData?.technicals || null,
-        sr: currentStock1Data.sr || null,
-        news: currentStock1Data.news || [],
+        ohlcv: updatedStock1Data.ohlcv || [],
+        technicals: updatedStock1Data.technicals || liveData?.technicals || null,
+        sr: updatedStock1Data.sr || null,
+        news: updatedStock1Data.news || [],
         quarterlyData: fetchedQuarterlyData,
-        sentimentData: null,
-        predictionData: null,
+        sentimentData: state.activeAnalysis.sentimentData || null,
+        predictionData: predData ? { ticker, periods: 10, data: predData } : null,
         backtestResult: null,
       });
 

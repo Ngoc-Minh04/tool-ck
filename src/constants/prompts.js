@@ -52,7 +52,7 @@ Liệt kê các rủi ro chính và mức độ
 ⚠️ **Lưu ý**: Phân tích trên chỉ mang tính chất tham khảo, không phải lời khuyên đầu tư chính thức. Quyết định đầu tư là hoàn toàn trách nhiệm của nhà đầu tư.`;
 
 // ===== PROMPT TẠO PHÂN TÍCH MÃ CK =====
-export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, info, technicals, additionalContext = '' }) => {
+export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, info, technicals, prediction, sr, additionalContext = '' }) => {
   const timeframeMap = {
     T1: '1 ngày tới (T+1)',
     T3: '3 ngày tới (T+3)',
@@ -98,6 +98,32 @@ export const buildAnalysisPrompt = ({ ticker, exchange, timeframe, sources, info
     return `${hist.toFixed(2)} → Đà giảm ⚠️`;
   };
 
+  // Format chuỗi dự đoán từ mô hình học máy (Prophet + XGBoost)
+  let mlForecastText = 'N/A';
+  let mlAccuracyLabel = 'N/A';
+  if (prediction && prediction.success && prediction.forecast && prediction.forecast.length > 0) {
+    const fList = prediction.forecast;
+    // Lấy tối đa 6 mốc phiên then chốt để tránh làm dài prompt: 1, 3, 5, 10, 20, 30
+    const indicesToKeep = [0, 2, 4, 9, 19, 29].filter(idx => idx < fList.length);
+    mlForecastText = indicesToKeep
+      .map(idx => {
+        const f = fList[idx];
+        const parts = f.date.split('-');
+        const dateStr = parts.length >= 3 ? `${parts[2]}/${parts[1]}` : f.date;
+        return `Phien +${idx + 1} (${dateStr}): ${f.predicted?.toLocaleString('vi-VN')} VND (${f.change_pct_from_now >= 0 ? '+' : ''}${f.change_pct_from_now}%)`;
+      })
+      .join(', ');
+    
+    if (prediction.accuracy_pct) {
+      mlAccuracyLabel = `${prediction.accuracy_pct}%`;
+    }
+  }
+
+  const s1 = sr?.supports && sr.supports.length > 0 ? sr.supports[0] : null;
+  const r1 = sr?.resistances && sr.resistances.length > 0 ? sr.resistances[0] : null;
+  const s1Label = s1 ? `${s1.toLocaleString('vi-VN')} VND` : 'N/A';
+  const r1Label = r1 ? `${r1.toLocaleString('vi-VN')} VND` : 'N/A';
+
   let liveDataPrompt = '';
   if (info && technicals) {
     liveDataPrompt = `
@@ -114,21 +140,31 @@ CHI BAO KY THUAT:
 - Stochastic K/D: ${stochLabel(technicals.stoch_k, technicals.stoch_d)}
 - MACD: ${technicals.macd ? technicals.macd.toFixed(2) : 'N/A'} | Signal: ${technicals.macd_signal ? technicals.macd_signal.toFixed(2) : 'N/A'} | Histogram: ${macdHistLabel(technicals.macd_hist)}
 - Bollinger Bands: Tren ${technicals.bb_upper ? Math.round(technicals.bb_upper).toLocaleString('vi-VN') : 'N/A'} | Giua ${technicals.bb_mid ? Math.round(technicals.bb_mid).toLocaleString('vi-VN') : 'N/A'} | Duoi ${technicals.bb_lower ? Math.round(technicals.bb_lower).toLocaleString('vi-VN') : 'N/A'} VND
-- ATR(14): ${technicals.atr ? technicals.atr.toFixed(2) : 'N/A'} VND | Stop-loss ATRx1.5: ${technicals.atr_stop ? technicals.atr_stop.toFixed(2) : 'N/A'} VND
+- ATR(14): ${technicals.atr ? Math.round(technicals.atr).toLocaleString('vi-VN') : 'N/A'} VND | Stop-loss ATRx1.5: ${technicals.atr_stop ? Math.round(technicals.atr_stop).toLocaleString('vi-VN') : 'N/A'} VND
+- Khang cu gan nhat: ${r1Label} | Ho tro gan nhat: ${s1Label}
 
 CO BAN:
 - P/E: ${info.fundamentals?.pe ?? 'N/A'}x | P/B: ${info.fundamentals?.pb ?? 'N/A'}x
 - ROE: ${info.fundamentals?.roe ?? 'N/A'}% | ROA: ${info.fundamentals?.roa ?? 'N/A'}%
 - EPS: ${info.fundamentals?.eps?.toLocaleString('vi-VN') ?? 'N/A'} VND | Von hoa: ${info.fundamentals?.marketCap ? (info.fundamentals.marketCap / 1e12).toFixed(1) + 'T VND' : 'N/A'}
+- Khoi ngoai (DTNN): ${info.foreignNet ? (info.foreignNet > 0 ? 'Mua rong +' : 'Ban rong ') + info.foreignNet.toLocaleString('vi-VN') + ' VND' : 'N/A'}
+
+BOI CANH THI TRUONG:
+- Chi so VNINDEX: ${info.vnindex ? `${info.vnindex.close} | Thay doi: ${info.vnindex.change >= 0 ? '+' : ''}${info.vnindex.change} (${info.vnindex.change_pct >= 0 ? '+' : ''}${info.vnindex.change_pct}%)` : 'N/A'}
+
+DU BAO DINH LUONG CUA MOHINH ML (Prophet + XGBoost):
+- Duong di gia du kien: ${mlForecastText}
+- Do chinh xac lich su (accuracy): ${mlAccuracyLabel}
 `;
   }
 
   const tfLabel = timeframeMap[timeframe] || timeframe;
-  const atrStop = technicals?.atr_stop ? technicals.atr_stop.toFixed(2) : 'N/A';
+  const atrStop = technicals?.atr_stop ? Math.round(technicals.atr_stop).toLocaleString('vi-VN') : 'N/A';
   const volRatioLabel = technicals?.volume_ratio ? volLabel(technicals.volume_ratio) : 'N/A';
+  const atrValue = technicals?.atr ? Math.round(technicals.atr).toLocaleString('vi-VN') : 'N/A';
 
-  return `Ban la chuyen gia phan tich chung khoan Viet Nam 15 nam kinh nghiem.
-Phan tich ${ticker} (${exchange}) khung ${tfLabel}.
+  return `Ban la chuyen gia phan tich va du bao gia chung khoan Viet Nam voi 15 nam kinh nghiem.
+Phan tich toan dien ${ticker} (${exchange}) khung ${tfLabel}.
 
 Nguon tham chieu uu tien: ${activeSources}
 ${liveDataPrompt}
@@ -137,7 +173,7 @@ ${additionalContext ? `Thong tin bo sung tu nha dau tu: ${additionalContext}` : 
 YEU CAU PHAN TICH (cau truc chuan, toi da 450 tu):
 
 ### 📊 TONG QUAN
-2-3 cau ve vi the hien tai va boi canh thi truong.
+2-3 cau ve vi the hien tai va boi canh thi truong chung VNINDEX.
 
 ### 📈 KY THUAT
 - **Xu huong chinh** + diem vao lenh toi uu
@@ -148,21 +184,32 @@ YEU CAU PHAN TICH (cau truc chuan, toi da 450 tu):
 
 ### 📋 CO BAN
 - Dinh gia so voi nganh (re/dat/hop ly) + ly do ngan gon
+- Nhan xet dong thai giao dich cua khoi ngoai và anh huong dong tien
 
-### 🎯 KE HOACH GIAO DICH (${tfLabel})
-| Kich ban | Xac suat | Muc tieu gia |
-|---|---|---|
-| 📈 TANG | ?% | ??? VND |
-| ➡️ CO SO | ?% | ??? VND |
-| 📉 GIAM | ?% | ??? VND |
+### 🎯 KE HOACH GIAO DICH & DU BAO GIATHANH (${tfLabel})
+AI hay tinh toan cac kich ban Tang/Giam bang cach cong/tru gia tri ATR = ${atrValue} VND vao gia tri kich ban Co so cua mo hinh ML o tren.
 
-- **Vung mua toi uu**: ___
+| Phien | Kich ban Tang (Co so + 1.0 ATR) | Kich ban Co so (Theo Mo hinh ML) | Kich ban Giam (Co so - 1.0 ATR) |
+|-------|---------------------------------|---------------------------------|---------------------------------|
+| +1    | ___ VND                         | ___ VND                         | ___ VND                         |
+| +3    | ___ VND                         | ___ VND                         | ___ VND                         |
+| +5    | ___ VND                         | ___ VND                         | ___ VND                         |
+| +10   | ___ VND                         | ___ VND                         | ___ VND                         |
+
+- **Xac suat kich ban**: Tang: ?% | Di ngang: ?% | Giam: ?% (Tong bang 100%)
+- **Vung mua toi uu**: ___ VND
 - **Stop-loss**: ___ (ATRx1.5 = ${atrStop} VND tinh tu gia vao)
 - **Take-profit 1**: ___ | **Take-profit 2**: ___
-- **Ti le R:R**: ___ | **Ti trong goi y**: ___% von | **Nam giu du kien**: ___ ngay
+- **Ti le Risk/Reward**: ___ | **Ti trong goi y**: ___% von | **Nam giu du kien**: ___ ngay
 
-### ⚡ KHUYEN NGHI
-**BUY 🟢 / HOLD 🟡 / SELL 🔴** - [ly do 1 cau] - Do tin cay: ___%
+### 📐 MO HINH FIBONACCI PROJECTION (Tinh tu day S1: ${s1Label} len dinh R1: ${r1Label}):
+- 61.8%: ___ VND
+- 100%: ___ VND
+- 161.8%: ___ VND
+
+### ⚡ KHUYEN NGHI & DIEU KIEN HUY DU BAO
+- **KHUYEN NGHI CHINH**: BUY 🟢 / HOLD 🟡 / SELL 🔴 — [ly do 1 cau] — Do tin cay: ___%
+- **Dieu khien huy du bao**: Du bao nay se mat hieu luc neu xay ra 1 trong cac dieu kien: (VD: gia dong cua duoi stop-loss, hoac VNINDEX gay ho tro...)
 
 ### ⚠️ RUI RO CHINH (top 3)
 1. ___ 2. ___ 3. ___
