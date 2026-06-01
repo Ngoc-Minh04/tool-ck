@@ -22,29 +22,35 @@ const getPriceColorClass = (price, ceil, floor, ref) => {
 };
 
 // Sparkline SVG mini chart
-const Sparkline = ({ open, high, low, price, ref: refPrice }) => {
-  const pts = [open, low, high, price].filter(Boolean);
+const Sparkline = ({ ticker, open, high, low, price, refPrice }) => {
+  const pts = [refPrice, open, low, high, price].filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
   if (pts.length < 2) return <span className="text-slate-600 text-[10px]">—</span>;
+  
   const minV = Math.min(...pts);
   const maxV = Math.max(...pts);
   const range = maxV - minV || 1;
   const w = 48, h = 18, pad = 1.5;
+  
   const xs = pts.map((_, i) => pad + (i / Math.max(pts.length - 1, 1)) * (w - pad * 2));
-  const ys = pts.map(v => h - pad - ((v - minV) / range) * (h - pad * 2));
+  const ys = pts.map(v => maxV === minV ? h / 2 : h - pad - ((v - minV) / range) * (h - pad * 2));
   const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
-  const isUp = price >= (refPrice || open);
-  const color = isUp ? '#4ade80' : '#f87171';
+  
+  const isUp = refPrice ? price > refPrice : price >= open;
+  const isDown = refPrice ? price < refPrice : price < open;
+  const color = isUp ? '#4ade80' : isDown ? '#f87171' : '#eab308'; // Green, Red, Yellow
+  const gradientId = `sg-${ticker}-${isUp ? 'u' : isDown ? 'd' : 'y'}`;
+
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
       <defs>
-        <linearGradient id={`sg-${isUp ? 'u' : 'd'}`} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.25" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path
         d={`${d} L${xs[xs.length - 1].toFixed(1)},${h} L${xs[0].toFixed(1)},${h} Z`}
-        fill={`url(#sg-${isUp ? 'u' : 'd'})`}
+        fill={`url(#${gradientId})`}
       />
       <path d={d} fill="none" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r="1.5" fill={color} />
@@ -463,7 +469,7 @@ const MarketPage = () => {
                           </td>
                           {/* Sparkline */}
                           <td className="py-1 px-1.5">
-                            <Sparkline open={row.open} high={row.high} low={row.low} price={row.price} ref={row.ref} />
+                            <Sparkline ticker={row.ticker} open={row.open} high={row.high} low={row.low} price={row.price} refPrice={row.ref} />
                           </td>
                           <td className={`py-1 px-1.5 font-num ${getPriceColorClass(row.open, row.ceil, row.floor, row.ref)}`}>
                             {row.open ? row.open.toLocaleString('vi-VN') : '-'}
