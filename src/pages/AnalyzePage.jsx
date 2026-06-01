@@ -18,7 +18,8 @@ import {
   ArrowDownRight, 
   HelpCircle,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Copy
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
@@ -77,6 +78,15 @@ const INFO_TABS = [
   { value: 'sentiment', label: '📰 Tâm lý Tin tức' },
   { value: 'prediction', label: '🔮 Dự báo AI' },
   { value: 'backtest', label: '🧪 Thử nghiệm AI' },
+];
+
+const POPULAR_STOCKS = [
+  { ticker: 'FPT', name: 'FPT Corp (Công nghệ)', exchange: 'HOSE' },
+  { ticker: 'HPG', name: 'Hòa Phát (Thép)', exchange: 'HOSE' },
+  { ticker: 'TCB', name: 'Techcombank (Ngân hàng)', exchange: 'HOSE' },
+  { ticker: 'VNM', name: 'Vinamilk (Sữa)', exchange: 'HOSE' },
+  { ticker: 'SSI', name: 'Chứng khoán SSI', exchange: 'HOSE' },
+  { ticker: 'MWG', name: 'Thế Giới Di Động', exchange: 'HOSE' },
 ];
 
 // ===== CUSTOM TOOLTIP CHO BIỂU ĐỒ DỰ BÁO =====
@@ -1112,10 +1122,22 @@ const BacktestTab = ({ ticker }) => {
 
             {aiAnalysis && !aiLoading && (
               <div className="glass-card p-5 space-y-4 border border-slate-800/40 bg-slate-900/10">
-                <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-3">
-                  <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block animate-pulse" />
-                  AI Nhận xét &amp; Đề xuất Cải tiến
-                </h4>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                  <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block animate-pulse" />
+                    AI Nhận xét &amp; Đề xuất Cải tiến
+                  </h4>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiAnalysis);
+                      toast.success('Đã sao chép báo cáo thử nghiệm AI!');
+                    }}
+                    className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-slate-950/60 hover:bg-slate-900/60 border border-slate-800/80 text-cyan-400 cursor-pointer transition-all"
+                  >
+                    <Copy size={10} />
+                    Copy
+                  </button>
+                </div>
                 <div className="markdown-content text-sm text-slate-300 leading-relaxed">
                   <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
                 </div>
@@ -1636,10 +1658,23 @@ const SentimentAnalysisTab = ({ data, news, loading, onAnalyze, ticker }) => {
 
       {/* Báo cáo phân tích chuyên sâu của AI */}
       <div className="glass-card p-5 space-y-4">
-        <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-3">
-          <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block animate-pulse" />
-          Báo cáo phân tích tâm lý tin tức của AI
-        </h4>
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+          <h4 className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-cyan-400 inline-block animate-pulse" />
+            Báo cáo phân tích tâm lý tin tức của AI
+          </h4>
+          <button
+            onClick={() => {
+              const textToCopy = markdown || `${summary}\n\n${bullets && bullets.length > 0 ? bullets.map(b => `- ${b.text || b}`).join('\n') : ''}`;
+              navigator.clipboard.writeText(textToCopy);
+              toast.success('Đã sao chép báo cáo tâm lý!');
+            }}
+            className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-slate-950/60 hover:bg-slate-900/60 border border-slate-800/80 text-cyan-400 cursor-pointer transition-all"
+          >
+            <Copy size={10} />
+            Copy
+          </button>
+        </div>
         
         {markdown ? (
           <div className="markdown-content text-sm text-slate-300 leading-relaxed">
@@ -2404,6 +2439,34 @@ const AnalyzePage = () => {
                         : '0 Tỷ'}
                     </span>
                   </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">RSI(14)</span>
+                    <span className={`font-extrabold font-num ${
+                      stock1.technicals?.rsi >= 70 ? 'text-rose-400' :
+                      stock1.technicals?.rsi <= 30 ? 'text-emerald-400' :
+                      'text-slate-200'
+                    }`}>
+                      {stock1.technicals?.rsi ? stock1.technicals.rsi.toFixed(1) : 'N/A'}
+                      {stock1.technicals?.rsi >= 70 && (
+                        <span className="text-[8px] font-extrabold ml-1 px-1 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">QUÁ MUA</span>
+                      )}
+                      {stock1.technicals?.rsi <= 30 && (
+                        <span className="text-[8px] font-extrabold ml-1 px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">QUÁ BÁN</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/30 p-2 rounded-xl border border-slate-900/40">
+                    <span className="text-[9px] text-slate-550 font-semibold block mb-0.5 uppercase">Xu hướng MA</span>
+                    <span className={`font-extrabold text-[10px] uppercase ${
+                      stock1.technicals?.trend === 'uptrend' ? 'text-emerald-400' :
+                      stock1.technicals?.trend === 'downtrend' ? 'text-rose-400' :
+                      'text-amber-400'
+                    }`}>
+                      {stock1.technicals?.trend === 'uptrend' ? 'UPTREND' :
+                       stock1.technicals?.trend === 'downtrend' ? 'DOWNTREND' :
+                       'SIDEWAYS'}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -2698,7 +2761,44 @@ const AnalyzePage = () => {
                 <p className="text-sm text-slate-500 max-w-md mx-auto">
                   Nhập mã cổ phiếu ở bên trái, chọn sàn và khung thời gian, sau đó nhấn phân tích để nhận khuyến nghị AI chuyên sâu.
                 </p>
-                <div className="flex justify-center gap-3 mt-6 text-xs text-slate-600">
+
+                {/* Gợi ý mã cổ phiếu phổ biến */}
+                <div className="mt-8 pt-6 border-t border-slate-800/40">
+                  <p className="text-[11px] text-slate-400 font-semibold mb-3 uppercase tracking-wider">
+                    Gợi ý phân tích nhanh các mã phổ biến:
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+                    {POPULAR_STOCKS.map((s) => (
+                      <button
+                        key={s.ticker}
+                        onClick={() => {
+                          const savedHistory = useAppStore.getState().history;
+                          const existing = savedHistory.find(
+                            (h) =>
+                              h.ticker.toUpperCase() === s.ticker.toUpperCase() &&
+                              (h.exchange || '').toUpperCase() === (s.exchange || 'HOSE').toUpperCase()
+                          );
+                          if (existing) {
+                            handleSelectStock(existing);
+                          } else {
+                            handleAnalyze({
+                              ticker: s.ticker,
+                              exchange: s.exchange,
+                              timeframe: 'T3',
+                              sources: settings.sources
+                            });
+                          }
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 bg-slate-900/40 border border-slate-850 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/30 cursor-pointer transition-all duration-200 transform hover:-translate-y-0.5"
+                        title={s.name}
+                      >
+                        {s.ticker}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-center gap-3 mt-8 text-[10px] text-slate-600">
                   <span>🎯 Tín hiệu BUY/HOLD/SELL</span>
                   <span>·</span>
                   <span>📈 Biểu đồ kỹ thuật</span>
